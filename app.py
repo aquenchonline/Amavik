@@ -29,11 +29,9 @@ def manage_tab(tab_name, worksheet_name):
     # -----------------------------------------------------------
     # A. READ DATA
     # -----------------------------------------------------------
-    # We use ttl=0 to ensure we always get fresh data
     try:
         data = conn.read(spreadsheet=SHEET_URL, worksheet=worksheet_name, ttl=0)
         if data is None or data.empty:
-             # Default empty structure if sheet is blank
              data = pd.DataFrame() 
     except Exception:
         data = pd.DataFrame()
@@ -49,7 +47,6 @@ def manage_tab(tab_name, worksheet_name):
             
             # === SPECIAL LOGIC FOR PACKING TAB ===
             if worksheet_name == "Packing":
-                # Layout: 3 Columns for better fit
                 c1, c2, c3 = st.columns(3)
                 
                 with c1:
@@ -63,7 +60,9 @@ def manage_tab(tab_name, worksheet_name):
                     bottom = st.selectbox("Bottom Print", ["No", "Laser", "Pad"], key="p_bot")
 
                 with c3:
-                    priority = st.selectbox("Order Priority", ["High", "Medium", "Low"], key="p_prio")
+                    # 👇 CHANGED: Priority is now a Number Input
+                    priority = st.number_input("Order Priority", min_value=1, step=1, key="p_prio")
+                    
                     box = st.selectbox("Box Type", ["Loose", "Brown Box", "White Box", "Box"], key="p_box")
                     remarks = st.text_input("Remarks", key="p_rem")
 
@@ -73,7 +72,6 @@ def manage_tab(tab_name, worksheet_name):
                     if not item:
                         st.warning("⚠️ Item Name is required")
                     else:
-                        # Packing Specific Data Structure
                         new_data = pd.DataFrame([{
                             "Date": str(date),
                             "Order Date": str(order_date),
@@ -103,7 +101,6 @@ def manage_tab(tab_name, worksheet_name):
                     if not item:
                         st.warning("⚠️ Item Name is required")
                     else:
-                        # Standard Data Structure
                         new_data = pd.DataFrame([{
                             "Date": str(date),
                             "Item": item,
@@ -135,7 +132,7 @@ with t1:
     manage_tab("Production", "Production") 
 
 with t2:
-    manage_tab("Packing", "Packing") # This triggers the special form
+    manage_tab("Packing", "Packing")
 
 with t3:
     manage_tab("Store", "Store")
