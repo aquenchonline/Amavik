@@ -6,7 +6,7 @@ import pandas as pd
 # CONFIGURATION
 # ------------------------------------------------------------------
 # 👇 REPLACE THIS WITH YOUR ACTUAL GOOGLE SHEET URL
-SHEET_URL = "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID_HERE/edit"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1S6xS6hcdKSPtzKxCL005GwvNWQNspNffNveI3P9zCgw/edit?gid=0#gid=0/edit"
 
 st.set_page_config(page_title="Google Sheets App", page_icon="📝")
 st.title("📝 My Google Sheets App")
