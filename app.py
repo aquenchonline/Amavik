@@ -1,7 +1,7 @@
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
-import plotly.express as px  # 👇 NEW IMPORT FOR CHARTS
+import plotly.express as px
 import time
 from datetime import date, timedelta, datetime
 
@@ -100,6 +100,9 @@ def manage_tab(tab_name, worksheet_name):
     # ===============================================================
     if worksheet_name == "Ecommerce":
         
+        # Initialize safe defaults to prevent UnboundLocalError
+        df_curr = pd.DataFrame() 
+        
         # --- HEADER & DROPDOWNS ---
         st.write("") 
         col_head, col_ch, col_date = st.columns([2, 1, 1])
@@ -187,7 +190,7 @@ def manage_tab(tab_name, worksheet_name):
         st.divider()
 
         # ===============================================================
-        # 👇 NEW: CHARTS SECTION (GRAPH + PIE)
+        # CHARTS SECTION (GRAPH + PIE)
         # ===============================================================
         st.subheader("📈 Visual Trends")
 
@@ -197,7 +200,6 @@ def manage_tab(tab_name, worksheet_name):
             df_viz["Today's Order"] = pd.to_numeric(df_viz["Today's Order"], errors='coerce').fillna(0)
 
             # --- RANGE SELECTOR ---
-            # Default to Last 10 days
             today = date.today()
             default_start = today - timedelta(days=10)
             
@@ -209,48 +211,28 @@ def manage_tab(tab_name, worksheet_name):
                     key="chart_range"
                 )
 
-            # Validate range selection (handle if user selects only 1 date)
             if isinstance(date_range, tuple) and len(date_range) == 2:
                 start_d, end_d = date_range
-                # Filter data for charts
                 mask_viz = (df_viz["Date"].dt.date >= start_d) & (df_viz["Date"].dt.date <= end_d)
                 df_viz_filtered = df_viz[mask_viz]
 
-                # Create Columns for Charts
                 g_col, p_col = st.columns([2, 1])
 
-                # 1. LINE GRAPH (Daily Orders)
+                # 1. LINE GRAPH
                 with g_col:
                     if not df_viz_filtered.empty:
-                        # Aggregate by Date
                         daily_trend = df_viz_filtered.groupby("Date")["Today's Order"].sum().reset_index()
-                        
-                        fig_line = px.line(
-                            daily_trend, 
-                            x="Date", 
-                            y="Today's Order", 
-                            title="Daily Order Trend",
-                            markers=True,
-                            template="plotly_white"
-                        )
+                        fig_line = px.line(daily_trend, x="Date", y="Today's Order", title="Daily Order Trend", markers=True)
                         fig_line.update_traces(line_color='#FF4B4B', line_width=3)
                         st.plotly_chart(fig_line, use_container_width=True)
                     else:
                         st.info("No data for this range")
 
-                # 2. PIE CHART (Channel Distribution)
+                # 2. PIE CHART
                 with p_col:
                     if not df_viz_filtered.empty and "Channel Name" in df_viz_filtered.columns:
-                        # Aggregate by Channel
                         channel_dist = df_viz_filtered.groupby("Channel Name")["Today's Order"].sum().reset_index()
-                        
-                        fig_pie = px.pie(
-                            channel_dist, 
-                            values="Today's Order", 
-                            names="Channel Name", 
-                            title="Orders by Channel",
-                            hole=0.4
-                        )
+                        fig_pie = px.pie(channel_dist, values="Today's Order", names="Channel Name", title="Orders by Channel", hole=0.4)
                         st.plotly_chart(fig_pie, use_container_width=True)
                     else:
                         st.info("No channel data")
@@ -264,8 +246,12 @@ def manage_tab(tab_name, worksheet_name):
         # ===============================================================
         st.write("### 📋 Detailed Logs")
         
-        # Using the KPI filter (Period/Channel) for the Table
-        display_df = df_curr.drop(columns=["dt"], errors="ignore")
+        # Safe dataframe creation logic for the table
+        if df_curr.empty:
+            # Create empty df with correct columns if df_curr is empty (avoids error)
+            display_df = pd.DataFrame(columns=data.columns).drop(columns=["dt"], errors="ignore")
+        else:
+            display_df = df_curr.drop(columns=["dt"], errors="ignore")
 
         is_editable = (st.session_state["role"] == "Ecommerce")
 
