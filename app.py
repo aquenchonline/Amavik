@@ -65,7 +65,8 @@ def filter_by_date(df, filter_option):
     if df.empty:
         return df
     
-    # Ensure Date column is datetime
+    # Create temp date column for filtering
+    # errors='coerce' turns invalid dates into NaT (Not a Time) so app doesn't crash
     df["temp_date"] = pd.to_datetime(df["Date"], errors='coerce').dt.date
     today = date.today()
     
@@ -93,7 +94,7 @@ def filter_by_date(df, filter_option):
     elif filter_option == "Next 30 Days":
         mask = (df["temp_date"] > today) & (df["temp_date"] <= (today + timedelta(days=30)))
 
-    # Drop temp column and return filtered
+    # Return filtered data and drop the temp column
     return df[mask].drop(columns=["temp_date"])
 
 # ------------------------------------------------------------------
@@ -119,8 +120,8 @@ def manage_tab(tab_name, worksheet_name):
     data["Status"] = data["Status"].fillna("Pending").replace("", "Pending")
 
     # --- ADD TRACKING ID FOR SAFE EDITING ---
-    # We add a temporary index column to track rows even after filtering
     if not data.empty:
+        # Create a safe index column to track rows during filtering
         data['_original_idx'] = data.index
 
     # 2. DATE FILTER UI
@@ -130,22 +131,29 @@ def manage_tab(tab_name, worksheet_name):
             "📅 Date Filter", 
             ["All", "Today", "Yesterday", "Prev 7 Days", "Prev 15 Days", "Prev 30 Days", "Prev All", 
              "Next 7 Days", "Next 15 Days", "Next 30 Days"],
-            index=0
+            index=0,
+            key=f"filter_{worksheet_name}" # Unique key for each tab
         )
 
     # Apply Filter
     filtered_data = filter_by_date(data, date_filter)
 
     # 3. SPLIT ACTIVE / COMPLETED
-    active_mask = filtered_data["Status"] != "Complete"
-    df_active_view = filtered_data[active_mask].copy()
-    df_completed_view = filtered_data[~active_mask].copy()
+    if not filtered_data.empty:
+        active_mask = filtered_data["Status"] != "Complete"
+        df_active_view = filtered_data[active_mask].copy()
+        df_completed_view = filtered_data[~active_mask].copy()
+    else:
+        df_active_view = pd.DataFrame()
+        df_completed_view = pd.DataFrame()
 
     # 4. ACTIVE TASKS TABLE
     st.write("### 🚀 Active Tasks")
     
     # Define Editable Columns
+    # We explicitly exclude _original_idx from the list of columns to process
     all_columns = [c for c in data.columns if c != "_original_idx"]
+    
     if st.session_state["role"] == "Admin":
         disabled_cols = ["_original_idx"]
     else:
@@ -153,10 +161,10 @@ def manage_tab(tab_name, worksheet_name):
         disabled_cols = [c for c in all_columns if c not in ["Ready Qty", "Status"]]
         disabled_cols.append("_original_idx")
 
-    # Column Config for Status Dropdown
+    # Column Config
     column_config = {
         "Status": st.column_config.SelectboxColumn("Status", options=["Pending", "Next Day", "Complete"], required=True),
-        "_original_idx": None # Hide this column
+        "_original_idx": None # Hide this column from UI
     }
 
     # EDITOR
@@ -169,32 +177,37 @@ def manage_tab(tab_name, worksheet_name):
         key=f"active_{worksheet_name}"
     )
 
-    # 5. SAVE LOGIC (SMART MERGE)
-    if not df_active_view.drop(columns=["_original_idx"], errors='ignore').equals(edited_active_df.drop(columns=["_original_idx"], errors='ignore')):
+    # 5. SAVE LOGIC (SMART MERGE WITH SAFETY CHECK)
+    # Check if data actually changed
+    # We drop the index col for comparison to avoid false positives
+    df_active_clean = df_active_view.drop(columns=["_original_idx"], errors='ignore')
+    df_edited_clean = edited_active_df.drop(columns=["_original_idx"], errors='ignore')
+
+    if not df_active_clean.equals(df_edited_clean):
         st.warning("⚠️ Changes detected.")
         if st.button(f"💾 Save Changes to {tab_name}", key=f"save_{worksheet_name}"):
             try:
                 # 1. Update Existing Rows
-                # Iterate through edited rows and update the main 'data' dataframe using '_original_idx'
                 for i, row in edited_active_df.iterrows():
                     idx = row.get("_original_idx")
-                    # If idx is valid (not NaN), it's an existing row
-                    if pd.notna(idx) and idx in data.index:
-                        # Update all columns for this row in the main data
-                        for col in all_columns:
-                            data.at[idx, col] = row[col]
                     
-                    # If idx is NaN, it's a NEW row added via the UI (Admin only)
+                    # EXISTING ROW UPDATE
+                    if pd.notna(idx) and idx in data.index:
+                        for col in all_columns:
+                            # 👇 THIS WAS THE FIX: Check if col exists in row before accessing
+                            if col in row:
+                                data.at[idx, col] = row[col]
+                    
+                    # NEW ROW (Added by Admin via Table)
                     elif pd.isna(idx):
-                        new_row_data = {col: row[col] for col in all_columns}
+                        new_row_data = {col: row[col] for col in all_columns if col in row}
                         data = pd.concat([data, pd.DataFrame([new_row_data])], ignore_index=True)
 
                 # 2. Handle Deletions (Admin only)
-                # If rows were present in view but missing in edited, they were deleted
                 if st.session_state["role"] == "Admin":
-                    original_ids_in_view = df_active_view["_original_idx"].dropna()
-                    current_ids_in_edit = edited_active_df["_original_idx"].dropna()
-                    deleted_ids = original_ids_in_view[~original_ids_in_view.isin(current_ids_in_edit)]
+                    original_ids = df_active_view["_original_idx"].dropna()
+                    current_ids = edited_active_df["_original_idx"].dropna()
+                    deleted_ids = original_ids[~original_ids.isin(current_ids)]
                     
                     if not deleted_ids.empty:
                         data = data.drop(deleted_ids)
@@ -218,21 +231,24 @@ def manage_tab(tab_name, worksheet_name):
     st.divider()
     with st.expander("✅ Completed History (Click to View)", expanded=False):
         if st.session_state["role"] == "Admin":
-             # Admin can edit history to fix mistakes
              edited_history_df = st.data_editor(
                 df_completed_view,
                 column_config=column_config,
                 use_container_width=True,
                 key=f"hist_{worksheet_name}"
             )
-             # Logic to save history edits (simplified for brevity: overwrite matched rows)
-             if not df_completed_view.equals(edited_history_df):
+             # Simple save for history
+             hist_clean = df_completed_view.drop(columns=["_original_idx"], errors='ignore')
+             hist_edited_clean = edited_history_df.drop(columns=["_original_idx"], errors='ignore')
+
+             if not hist_clean.equals(hist_edited_clean):
                  if st.button(f"💾 Update History for {tab_name}"):
                      for i, row in edited_history_df.iterrows():
                         idx = row.get("_original_idx")
                         if pd.notna(idx) and idx in data.index:
                              for col in all_columns:
-                                data.at[idx, col] = row[col]
+                                if col in row:
+                                    data.at[idx, col] = row[col]
                      
                      if "_original_idx" in data.columns:
                         final_upload = data.drop(columns=["_original_idx"])
@@ -278,7 +294,6 @@ def manage_tab(tab_name, worksheet_name):
                         if not item:
                             st.warning("Item Name Required")
                         else:
-                            # Drop temporary index before saving new entry
                             clean_data = data.drop(columns=["_original_idx"], errors='ignore')
                             new_row = pd.DataFrame([{
                                 "Date": str(date_val), "Order Date": str(order_date), "Order Priority": priority,
