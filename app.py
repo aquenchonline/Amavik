@@ -1,79 +1,95 @@
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
+from datetime import datetime
 
 # ------------------------------------------------------------------
 # CONFIGURATION
 # ------------------------------------------------------------------
-# 👇 REPLACE THIS WITH YOUR ACTUAL GOOGLE SHEET URL
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1S6xS6hcdKSPtzKxCL005GwvNWQNspNffNveI3P9zCgw/edit?gid=0#gid=0/edit"
+st.set_page_config(page_title="ERP System", layout="wide")
+SHEET_URL = "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID_HERE/edit"
 
-st.set_page_config(page_title="Google Sheets App", page_icon="📝")
-st.title("📝 My Google Sheets App")
+st.title("🏭 Mini ERP System")
+st.markdown("Manage Production, Packing, Store, and Ecommerce data.")
 
-# ------------------------------------------------------------------
-# 1. ESTABLISH CONNECTION
-# ------------------------------------------------------------------
-# The error you saw usually happens if the secrets are formatted wrong.
-# We use a try-except block to catch it and give you a helpful hint.
+# Connect to Google Sheets
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
 except Exception as e:
-    st.error("🚨 Connection Error!")
-    st.error(f"Detailed Error: {e}")
-    st.info("💡 Hint: Check your secrets.toml. Ensure 'private_key' handles newlines (\\n) correctly.")
+    st.error(f"Connection Error: {e}")
     st.stop()
 
 # ------------------------------------------------------------------
-# 2. READ DATA
+# REUSABLE FUNCTION TO HANDLE DATA
 # ------------------------------------------------------------------
-try:
-    # We use valid_worksheet checks to avoid reading empty sheets erroneously
-    data = conn.read(spreadsheet=SHEET_URL, worksheet="Sheet1")
-    
-    st.write("### 📊 Current Data")
-    # If data is empty, create a default dataframe
-    if data.empty:
-        data = pd.DataFrame(columns=["Name", "Message"])
-        st.warning("Sheet is empty. Add data below!")
-    
+def manage_tab(tab_name, worksheet_name):
+    """
+    Reads and writes data for a specific worksheet.
+    """
+    st.header(f"{tab_name} Department")
+
+    # 1. READ DATA
+    try:
+        data = conn.read(spreadsheet=SHEET_URL, worksheet=worksheet_name)
+        # Handle empty sheet
+        if data.empty:
+            data = pd.DataFrame(columns=["Date", "Item", "Quantity", "Notes"])
+    except Exception:
+        # If sheet doesn't exist or has error, init empty
+        data = pd.DataFrame(columns=["Date", "Item", "Quantity", "Notes"])
+
+    # Show Data Table
     st.dataframe(data, use_container_width=True)
 
-except Exception as e:
-    st.error(f"Error reading data: {e}")
-    st.stop()
+    # 2. WRITE DATA (FORM)
+    with st.expander(f"➕ Add Entry to {tab_name}"):
+        with st.form(key=f"form_{worksheet_name}"):
+            # unique key is needed for each form so they don't mix up
+            col1, col2 = st.columns(2)
+            with col1:
+                date = st.date_input("Date", key=f"date_{worksheet_name}")
+                item = st.text_input("Item Name", key=f"item_{worksheet_name}")
+            with col2:
+                qty = st.number_input("Quantity", min_value=0, step=1, key=f"qty_{worksheet_name}")
+                notes = st.text_input("Notes/Status", key=f"note_{worksheet_name}")
+            
+            submit = st.form_submit_button("Submit Entry")
+
+            if submit:
+                if not item:
+                    st.warning("⚠️ Item Name is required")
+                else:
+                    # Create new row
+                    new_data = pd.DataFrame([{
+                        "Date": str(date),
+                        "Item": item,
+                        "Quantity": qty,
+                        "Notes": notes
+                    }])
+                    
+                    # Append and Update
+                    updated_df = pd.concat([data, new_data], ignore_index=True)
+                    conn.update(spreadsheet=SHEET_URL, worksheet=worksheet_name, data=updated_df)
+                    
+                    st.success(f"✅ Added to {tab_name}!")
+                    st.rerun()
 
 # ------------------------------------------------------------------
-# 3. WRITE DATA (FORM)
+# MAIN APP LAYOUT (TABS)
 # ------------------------------------------------------------------
-st.divider()
-st.write("### ➕ Add New Entry")
 
-with st.form(key="entry_form"):
-    name = st.text_input("Your Name")
-    message = st.text_area("Your Message")
-    submit_button = st.form_submit_button(label="Submit Data")
+# Create the visual tabs
+t1, t2, t3, t4 = st.tabs(["🔨 Production", "📦 Packing", "wf Store", "🛒 Ecommerce"])
 
-    if submit_button:
-        if not name or not message:
-            st.warning("⚠️ Please fill in both fields.")
-        else:
-            try:
-                # Create a new row
-                new_row = pd.DataFrame([{"Name": name, "Message": message}])
-                
-                # Combine old data with new data
-                updated_df = pd.concat([data, new_row], ignore_index=True)
-                
-                # Update Google Sheets
-                conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=updated_df)
-                
-                st.success("✅ Data saved! Refreshing...")
-                
-                # Wait 1 second then reload to show new data
-                import time
-                time.sleep(1)
-                st.rerun()
-                
-            except Exception as e:
-                st.error(f"Error updating data: {e}")
+# Run the function for each tab
+with t1:
+    manage_tab("Production", "Production") # (Display Name, Sheet Tab Name)
+
+with t2:
+    manage_tab("Packing", "Packing")
+
+with t3:
+    manage_tab("Store", "Store")
+
+with t4:
+    manage_tab("Ecommerce", "Ecommerce")
