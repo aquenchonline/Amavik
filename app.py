@@ -17,7 +17,6 @@ USERS = {
     "Production": {"pass": "Amavik@80", "role": "Production", "access": ["Production"]},
     "Packing":    {"pass": "Amavik@97", "role": "Packing",    "access": ["Packing"]},
     "Store":      {"pass": "Amavik@17", "role": "Store",      "access": ["Store"]},
-    # 👇 NEW USER ADDED
     "Ecommerce":  {"pass": "Amavik@12", "role": "Ecommerce",  "access": ["Ecommerce"]},
     "Amar":       {"pass": "Aquench@1933", "role": "Admin",   "access": ["Production", "Packing", "Store", "Ecommerce", "Configuration"]}
 }
@@ -61,7 +60,7 @@ except Exception as e:
     st.stop()
 
 # ------------------------------------------------------------------
-# HELPER: DATE FILTER
+# HELPER: DATE FILTERS
 # ------------------------------------------------------------------
 def filter_by_date(df, filter_option):
     if df.empty: return df
@@ -76,9 +75,8 @@ def filter_by_date(df, filter_option):
     elif filter_option == "Prev 15 Days": mask = (df["temp_date"] >= (today - timedelta(days=15))) & (df["temp_date"] < today)
     elif filter_option == "Prev 30 Days": mask = (df["temp_date"] >= (today - timedelta(days=30))) & (df["temp_date"] < today)
     elif filter_option == "Prev All": mask = df["temp_date"] < today
-    elif filter_option == "Next 7 Days": mask = (df["temp_date"] > today) & (df["temp_date"] <= (today + timedelta(days=7)))
-    elif filter_option == "Next 15 Days": mask = (df["temp_date"] > today) & (df["temp_date"] <= (today + timedelta(days=15)))
-    elif filter_option == "Next 30 Days": mask = (df["temp_date"] > today) & (df["temp_date"] <= (today + timedelta(days=30)))
+    elif filter_option == "This Month": 
+        mask = (df["temp_date"] >= today.replace(day=1)) & (df["temp_date"] <= today)
     
     return df[mask].drop(columns=["temp_date"])
 
@@ -86,8 +84,6 @@ def filter_by_date(df, filter_option):
 # CORE FUNCTION: MANAGE DATA
 # ------------------------------------------------------------------
 def manage_tab(tab_name, worksheet_name):
-    st.subheader(f"📂 {tab_name} Dashboard")
-
     # 1. READ DATA
     try:
         data = conn.read(spreadsheet=SHEET_URL, worksheet=worksheet_name, ttl=0)
@@ -100,73 +96,157 @@ def manage_tab(tab_name, worksheet_name):
         data['_original_idx'] = data.index
 
     # ===============================================================
-    # SPECIAL LOGIC FOR ECOMMERCE TAB
+    # SPECIAL LOGIC FOR ECOMMERCE DASHBOARD
     # ===============================================================
     if worksheet_name == "Ecommerce":
-        # 1. KPI CALCULATIONS (Today vs Yesterday)
-        st.write("### 📊 Performance Overview")
         
-        # Helper to get numeric sums for a specific date
-        def get_daily_sums(df, target_date):
-            if df.empty: return 0, 0, 0
-            # Filter rows for date
-            df_temp = df.copy()
-            df_temp["dt"] = pd.to_datetime(df_temp["Date"], errors='coerce').dt.date
-            day_data = df_temp[df_temp["dt"] == target_date]
+        # --- HEADER & DROPDOWNS ---
+        st.write("") # Spacer
+        col_head, col_ch, col_date = st.columns([2, 1, 1])
+        
+        with col_head:
+            st.subheader("📊 Performance Overview")
+        
+        # Extract Channels
+        unique_channels = ["All Channels"]
+        if "Channel Name" in data.columns:
+            channels_list = sorted(data["Channel Name"].astype(str).unique().tolist())
+            unique_channels.extend(channels_list)
+
+        with col_ch:
+            selected_channel = st.selectbox("Select Channel", unique_channels, index=0)
+
+        with col_date:
+            selected_period = st.selectbox(
+                "Select Period", 
+                ["Today", "Yesterday", "Last 7 Days", "Last 15 Days", "Last 30 Days", "This Month", "All Time"],
+                index=0
+            )
+
+        # --- CALCULATE KPI DATA (CURRENT vs PREVIOUS) ---
+        if not data.empty:
+            df_calc = data.copy()
+            df_calc["dt"] = pd.to_datetime(df_calc["Date"], errors='coerce').dt.date
             
-            # Sum columns safely
-            orders = pd.to_numeric(day_data["Today's Order"], errors='coerce').sum()
-            dispatch = pd.to_numeric(day_data["Today's Dispatch"], errors='coerce').sum()
-            returns = pd.to_numeric(day_data["Return"], errors='coerce').sum()
-            return orders, dispatch, returns
+            # Filter Channel First
+            if selected_channel != "All Channels":
+                df_calc = df_calc[df_calc["Channel Name"] == selected_channel]
 
-        today = date.today()
-        yesterday = today - timedelta(days=1)
+            today = date.today()
+            
+            # Determine Date Ranges based on selection
+            if selected_period == "Today":
+                curr_start, curr_end = today, today
+                prev_start, prev_end = today - timedelta(days=1), today - timedelta(days=1)
+                
+            elif selected_period == "Yesterday":
+                curr_start, curr_end = today - timedelta(days=1), today - timedelta(days=1)
+                prev_start, prev_end = today - timedelta(days=2), today - timedelta(days=2)
+                
+            elif selected_period == "Last 7 Days":
+                curr_start, curr_end = today - timedelta(days=6), today
+                prev_start, prev_end = today - timedelta(days=13), today - timedelta(days=7)
 
-        t_ord, t_dis, t_ret = get_daily_sums(data, today)
-        y_ord, y_dis, y_ret = get_daily_sums(data, yesterday)
+            elif selected_period == "Last 15 Days":
+                curr_start, curr_end = today - timedelta(days=14), today
+                prev_start, prev_end = today - timedelta(days=29), today - timedelta(days=15)
+                
+            elif selected_period == "Last 30 Days":
+                curr_start, curr_end = today - timedelta(days=29), today
+                prev_start, prev_end = today - timedelta(days=59), today - timedelta(days=30)
+                
+            elif selected_period == "This Month":
+                curr_start, curr_end = today.replace(day=1), today
+                # Previous period: Same days in previous month
+                # (Simple logic: subtract 30 days roughly or handled precisely)
+                # Let's use exact previous month shift
+                prev_month_end = curr_start - timedelta(days=1)
+                prev_month_start = prev_month_end.replace(day=1)
+                prev_start, prev_end = prev_month_start, prev_month_start + (curr_end - curr_start)
+            
+            else: # All Time
+                curr_start, curr_end = date.min, date.max
+                prev_start, prev_end = date.min, date.min # No comparison
 
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Today's Orders", f"{int(t_ord)}", delta=f"{int(t_ord - y_ord)} vs Yest")
-        with col2:
-            st.metric("Dispatched Today", f"{int(t_dis)}", delta=f"{int(t_dis - y_dis)} vs Yest")
-        with col3:
-            # For returns, positive delta is usually "bad", but st.metric makes positive green by default.
-            # We invert the color logic: delta_color="inverse" means Red for Up, Green for Down
-            st.metric("Today's Returns", f"{int(t_ret)}", delta=f"{int(t_ret - y_ret)} vs Yest", delta_color="inverse")
+            # Filter Current Period
+            mask_curr = (df_calc["dt"] >= curr_start) & (df_calc["dt"] <= curr_end)
+            df_curr = df_calc[mask_curr]
+
+            # Filter Previous Period
+            mask_prev = (df_calc["dt"] >= prev_start) & (df_calc["dt"] <= prev_end)
+            df_prev = df_calc[mask_prev]
+
+            # Sum Values
+            def sum_cols(df):
+                o = pd.to_numeric(df["Today's Order"], errors='coerce').sum()
+                d = pd.to_numeric(df["Today's Dispatch"], errors='coerce').sum()
+                r = pd.to_numeric(df["Return"], errors='coerce').sum()
+                return int(o), int(d), int(r)
+
+            c_ord, c_dis, c_ret = sum_cols(df_curr)
+            p_ord, p_dis, p_ret = sum_cols(df_prev)
+
+            # Display KPIs
+            k1, k2, k3 = st.columns(3)
+            
+            # Helper to calculate delta string
+            def get_delta(curr, prev):
+                if selected_period == "All Time": return None
+                diff = curr - prev
+                if prev == 0: return f"{diff} (New)"
+                pct = round((diff / prev) * 100, 1)
+                return f"{diff} ({pct}%)"
+
+            with k1:
+                st.metric(
+                    label=f"Orders ({selected_period})", 
+                    value=c_ord, 
+                    delta=get_delta(c_ord, p_ord)
+                )
+            with k2:
+                st.metric(
+                    label=f"Dispatched ({selected_period})", 
+                    value=c_dis, 
+                    delta=get_delta(c_dis, p_dis)
+                )
+            with k3:
+                # Inverse color for returns (Green is good = less returns)
+                st.metric(
+                    label=f"Returns ({selected_period})", 
+                    value=c_ret, 
+                    delta=get_delta(c_ret, p_ret),
+                    delta_color="inverse"
+                )
 
         st.divider()
 
         # 2. DATA TABLE & PERMISSIONS
-        # Logic: Only "Ecommerce" role can edit. Admin is View Only.
+        st.write("### 📋 Detailed Logs")
+        
+        # Show data matching the CURRENT FILTERS (Channel + Period)
+        # We reuse the df_curr calculated above for consistency
+        display_df = df_curr.drop(columns=["dt"], errors="ignore")
+
         is_editable = (st.session_state["role"] == "Ecommerce")
-        
-        st.write("### 📋 Data Log")
-        
-        # Date Filter
-        d_filter = st.selectbox("📅 Filter View", ["All", "Today", "Yesterday", "Prev 7 Days"], index=1, key="eco_filter")
-        filtered_view = filter_by_date(data, d_filter)
 
         if is_editable:
-            # Editable Table for Ecommerce User
             edited_df = st.data_editor(
-                filtered_view,
+                display_df,
                 use_container_width=True,
                 num_rows="fixed",
                 key="eco_editor",
                 disabled=["_original_idx"]
             )
             
-            # Save Button
-            clean_view = filtered_view.drop(columns=["_original_idx"], errors='ignore')
+            # Save Logic
+            clean_view = display_df.drop(columns=["_original_idx"], errors='ignore')
             clean_edited = edited_df.drop(columns=["_original_idx"], errors='ignore')
             
             if not clean_view.equals(clean_edited):
                 if st.button("💾 Save Changes"):
                     save_smart_update(data, edited_df, worksheet_name)
 
-            # Add Entry Form (Only for Ecommerce User)
+            # Add Entry Form
             st.divider()
             with st.expander("➕ Add New Ecommerce Entry"):
                 with st.form("eco_form"):
@@ -188,23 +268,22 @@ def manage_tab(tab_name, worksheet_name):
                                 "Today's Order": orders, "Today's Dispatch": dispatch, "Return": ret
                             }])
                             save_new_row(data, new_row, worksheet_name)
-
         else:
-            # Read-Only View for Admin
             st.info("ℹ️ Read-Only View (Admin Access)")
-            st.dataframe(filtered_view.drop(columns=["_original_idx"], errors='ignore'), use_container_width=True)
+            st.dataframe(display_df.drop(columns=["_original_idx"], errors='ignore'), use_container_width=True)
 
         return # End Ecommerce logic here
 
     # ===============================================================
-    # STANDARD LOGIC FOR PRODUCTION / PACKING / STORE
+    # STANDARD LOGIC (Production, Packing, Store)
     # ===============================================================
     
+    st.subheader(f"📂 {tab_name} Dashboard")
+
     # Ensure Columns
     if "Ready Qty" not in data.columns: data["Ready Qty"] = 0
     if "Status" not in data.columns: data["Status"] = "Pending"
     
-    # Special columns for Packing
     if worksheet_name == "Packing":
         if "Party Name" not in data.columns: data["Party Name"] = ""
         desired_order = ["Date", "Order Date", "Order Priority", "Item Name", "Party Name", "Qty", "Logo", "Bottom Print", "Box", "Remarks", "Ready Qty", "Status"]
@@ -328,7 +407,6 @@ def save_smart_update(original_data, edited_subset, sheet_name):
                 for col in all_cols:
                     if col in row: original_data.at[idx, col] = row[col]
             elif pd.isna(idx):
-                # New row added via table
                 new_data = {col: row[col] for col in all_cols if col in row}
                 original_data = pd.concat([original_data, pd.DataFrame([new_data])], ignore_index=True)
         
