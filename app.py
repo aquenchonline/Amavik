@@ -100,8 +100,8 @@ def manage_tab(tab_name, worksheet_name):
     # ===============================================================
     if worksheet_name == "Ecommerce":
         
-        # Initialize safe defaults to prevent UnboundLocalError
-        df_curr = pd.DataFrame() 
+        # Initialize defaults to prevent crash
+        df_curr = pd.DataFrame()
         
         # --- HEADER & DROPDOWNS ---
         st.write("") 
@@ -199,7 +199,7 @@ def manage_tab(tab_name, worksheet_name):
             df_viz["Date"] = pd.to_datetime(df_viz["Date"], errors='coerce')
             df_viz["Today's Order"] = pd.to_numeric(df_viz["Today's Order"], errors='coerce').fillna(0)
 
-            # --- RANGE SELECTOR ---
+            # Range Selector
             today = date.today()
             default_start = today - timedelta(days=10)
             
@@ -237,7 +237,7 @@ def manage_tab(tab_name, worksheet_name):
                     else:
                         st.info("No channel data")
             else:
-                st.warning("Please select a Start and End date")
+                st.warning("Select both Start and End date")
 
         st.divider()
 
@@ -246,10 +246,12 @@ def manage_tab(tab_name, worksheet_name):
         # ===============================================================
         st.write("### 📋 Detailed Logs")
         
-        # Safe dataframe creation logic for the table
+        # Safe Display
         if df_curr.empty:
-            # Create empty df with correct columns if df_curr is empty (avoids error)
-            display_df = pd.DataFrame(columns=data.columns).drop(columns=["dt"], errors="ignore")
+            if not data.empty:
+                display_df = pd.DataFrame(columns=data.columns).drop(columns=["dt"], errors="ignore")
+            else:
+                display_df = pd.DataFrame()
         else:
             display_df = df_curr.drop(columns=["dt"], errors="ignore")
 
