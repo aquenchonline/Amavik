@@ -1,8 +1,9 @@
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
+import plotly.express as px  # 👇 NEW IMPORT FOR CHARTS
 import time
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 
 # ------------------------------------------------------------------
 # CONFIGURATION
@@ -91,7 +92,6 @@ def manage_tab(tab_name, worksheet_name):
     except:
         data = pd.DataFrame()
 
-    # --- ADD TRACKING ID ---
     if not data.empty:
         data['_original_idx'] = data.index
 
@@ -101,13 +101,12 @@ def manage_tab(tab_name, worksheet_name):
     if worksheet_name == "Ecommerce":
         
         # --- HEADER & DROPDOWNS ---
-        st.write("") # Spacer
+        st.write("") 
         col_head, col_ch, col_date = st.columns([2, 1, 1])
         
         with col_head:
             st.subheader("📊 Performance Overview")
         
-        # Extract Channels
         unique_channels = ["All Channels"]
         if "Channel Name" in data.columns:
             channels_list = sorted(data["Channel Name"].astype(str).unique().tolist())
@@ -123,60 +122,46 @@ def manage_tab(tab_name, worksheet_name):
                 index=0
             )
 
-        # --- CALCULATE KPI DATA (CURRENT vs PREVIOUS) ---
+        # --- KPI CALCULATIONS ---
         if not data.empty:
             df_calc = data.copy()
             df_calc["dt"] = pd.to_datetime(df_calc["Date"], errors='coerce').dt.date
             
-            # Filter Channel First
             if selected_channel != "All Channels":
                 df_calc = df_calc[df_calc["Channel Name"] == selected_channel]
 
             today = date.today()
             
-            # Determine Date Ranges based on selection
             if selected_period == "Today":
                 curr_start, curr_end = today, today
                 prev_start, prev_end = today - timedelta(days=1), today - timedelta(days=1)
-                
             elif selected_period == "Yesterday":
                 curr_start, curr_end = today - timedelta(days=1), today - timedelta(days=1)
                 prev_start, prev_end = today - timedelta(days=2), today - timedelta(days=2)
-                
             elif selected_period == "Last 7 Days":
                 curr_start, curr_end = today - timedelta(days=6), today
                 prev_start, prev_end = today - timedelta(days=13), today - timedelta(days=7)
-
             elif selected_period == "Last 15 Days":
                 curr_start, curr_end = today - timedelta(days=14), today
                 prev_start, prev_end = today - timedelta(days=29), today - timedelta(days=15)
-                
             elif selected_period == "Last 30 Days":
                 curr_start, curr_end = today - timedelta(days=29), today
                 prev_start, prev_end = today - timedelta(days=59), today - timedelta(days=30)
-                
             elif selected_period == "This Month":
                 curr_start, curr_end = today.replace(day=1), today
-                # Previous period: Same days in previous month
-                # (Simple logic: subtract 30 days roughly or handled precisely)
-                # Let's use exact previous month shift
                 prev_month_end = curr_start - timedelta(days=1)
                 prev_month_start = prev_month_end.replace(day=1)
                 prev_start, prev_end = prev_month_start, prev_month_start + (curr_end - curr_start)
-            
-            else: # All Time
+            else:
                 curr_start, curr_end = date.min, date.max
-                prev_start, prev_end = date.min, date.min # No comparison
+                prev_start, prev_end = date.min, date.min
 
-            # Filter Current Period
+            # Filter Current & Previous
             mask_curr = (df_calc["dt"] >= curr_start) & (df_calc["dt"] <= curr_end)
             df_curr = df_calc[mask_curr]
-
-            # Filter Previous Period
             mask_prev = (df_calc["dt"] >= prev_start) & (df_calc["dt"] <= prev_end)
             df_prev = df_calc[mask_prev]
 
-            # Sum Values
             def sum_cols(df):
                 o = pd.to_numeric(df["Today's Order"], errors='coerce').sum()
                 d = pd.to_numeric(df["Today's Dispatch"], errors='coerce').sum()
@@ -186,10 +171,8 @@ def manage_tab(tab_name, worksheet_name):
             c_ord, c_dis, c_ret = sum_cols(df_curr)
             p_ord, p_dis, p_ret = sum_cols(df_prev)
 
-            # Display KPIs
             k1, k2, k3 = st.columns(3)
             
-            # Helper to calculate delta string
             def get_delta(curr, prev):
                 if selected_period == "All Time": return None
                 diff = curr - prev
@@ -197,34 +180,91 @@ def manage_tab(tab_name, worksheet_name):
                 pct = round((diff / prev) * 100, 1)
                 return f"{diff} ({pct}%)"
 
-            with k1:
-                st.metric(
-                    label=f"Orders ({selected_period})", 
-                    value=c_ord, 
-                    delta=get_delta(c_ord, p_ord)
-                )
-            with k2:
-                st.metric(
-                    label=f"Dispatched ({selected_period})", 
-                    value=c_dis, 
-                    delta=get_delta(c_dis, p_dis)
-                )
-            with k3:
-                # Inverse color for returns (Green is good = less returns)
-                st.metric(
-                    label=f"Returns ({selected_period})", 
-                    value=c_ret, 
-                    delta=get_delta(c_ret, p_ret),
-                    delta_color="inverse"
-                )
+            with k1: st.metric(label=f"Orders ({selected_period})", value=c_ord, delta=get_delta(c_ord, p_ord))
+            with k2: st.metric(label=f"Dispatched ({selected_period})", value=c_dis, delta=get_delta(c_dis, p_dis))
+            with k3: st.metric(label=f"Returns ({selected_period})", value=c_ret, delta=get_delta(c_ret, p_ret), delta_color="inverse")
 
         st.divider()
 
-        # 2. DATA TABLE & PERMISSIONS
+        # ===============================================================
+        # 👇 NEW: CHARTS SECTION (GRAPH + PIE)
+        # ===============================================================
+        st.subheader("📈 Visual Trends")
+
+        if not data.empty:
+            df_viz = data.copy()
+            df_viz["Date"] = pd.to_datetime(df_viz["Date"], errors='coerce')
+            df_viz["Today's Order"] = pd.to_numeric(df_viz["Today's Order"], errors='coerce').fillna(0)
+
+            # --- RANGE SELECTOR ---
+            # Default to Last 10 days
+            today = date.today()
+            default_start = today - timedelta(days=10)
+            
+            c_range, c_blank = st.columns([1, 2])
+            with c_range:
+                date_range = st.date_input(
+                    "Select Date Range for Charts",
+                    value=(default_start, today),
+                    key="chart_range"
+                )
+
+            # Validate range selection (handle if user selects only 1 date)
+            if isinstance(date_range, tuple) and len(date_range) == 2:
+                start_d, end_d = date_range
+                # Filter data for charts
+                mask_viz = (df_viz["Date"].dt.date >= start_d) & (df_viz["Date"].dt.date <= end_d)
+                df_viz_filtered = df_viz[mask_viz]
+
+                # Create Columns for Charts
+                g_col, p_col = st.columns([2, 1])
+
+                # 1. LINE GRAPH (Daily Orders)
+                with g_col:
+                    if not df_viz_filtered.empty:
+                        # Aggregate by Date
+                        daily_trend = df_viz_filtered.groupby("Date")["Today's Order"].sum().reset_index()
+                        
+                        fig_line = px.line(
+                            daily_trend, 
+                            x="Date", 
+                            y="Today's Order", 
+                            title="Daily Order Trend",
+                            markers=True,
+                            template="plotly_white"
+                        )
+                        fig_line.update_traces(line_color='#FF4B4B', line_width=3)
+                        st.plotly_chart(fig_line, use_container_width=True)
+                    else:
+                        st.info("No data for this range")
+
+                # 2. PIE CHART (Channel Distribution)
+                with p_col:
+                    if not df_viz_filtered.empty and "Channel Name" in df_viz_filtered.columns:
+                        # Aggregate by Channel
+                        channel_dist = df_viz_filtered.groupby("Channel Name")["Today's Order"].sum().reset_index()
+                        
+                        fig_pie = px.pie(
+                            channel_dist, 
+                            values="Today's Order", 
+                            names="Channel Name", 
+                            title="Orders by Channel",
+                            hole=0.4
+                        )
+                        st.plotly_chart(fig_pie, use_container_width=True)
+                    else:
+                        st.info("No channel data")
+            else:
+                st.warning("Please select a Start and End date")
+
+        st.divider()
+
+        # ===============================================================
+        # DATA TABLE
+        # ===============================================================
         st.write("### 📋 Detailed Logs")
         
-        # Show data matching the CURRENT FILTERS (Channel + Period)
-        # We reuse the df_curr calculated above for consistency
+        # Using the KPI filter (Period/Channel) for the Table
         display_df = df_curr.drop(columns=["dt"], errors="ignore")
 
         is_editable = (st.session_state["role"] == "Ecommerce")
@@ -238,7 +278,6 @@ def manage_tab(tab_name, worksheet_name):
                 disabled=["_original_idx"]
             )
             
-            # Save Logic
             clean_view = display_df.drop(columns=["_original_idx"], errors='ignore')
             clean_edited = edited_df.drop(columns=["_original_idx"], errors='ignore')
             
@@ -246,7 +285,6 @@ def manage_tab(tab_name, worksheet_name):
                 if st.button("💾 Save Changes"):
                     save_smart_update(data, edited_df, worksheet_name)
 
-            # Add Entry Form
             st.divider()
             with st.expander("➕ Add New Ecommerce Entry"):
                 with st.form("eco_form"):
@@ -272,15 +310,13 @@ def manage_tab(tab_name, worksheet_name):
             st.info("ℹ️ Read-Only View (Admin Access)")
             st.dataframe(display_df.drop(columns=["_original_idx"], errors='ignore'), use_container_width=True)
 
-        return # End Ecommerce logic here
+        return 
 
     # ===============================================================
     # STANDARD LOGIC (Production, Packing, Store)
     # ===============================================================
-    
     st.subheader(f"📂 {tab_name} Dashboard")
 
-    # Ensure Columns
     if "Ready Qty" not in data.columns: data["Ready Qty"] = 0
     if "Status" not in data.columns: data["Status"] = "Pending"
     
@@ -317,14 +353,12 @@ def manage_tab(tab_name, worksheet_name):
     else:
         df_active, df_comp = pd.DataFrame(), pd.DataFrame()
 
-    # PERMISSIONS
     all_columns = [c for c in data.columns if c != "_original_idx"]
     if st.session_state["role"] == "Admin":
         disabled_cols = ["_original_idx"]
     else:
         disabled_cols = [c for c in all_columns if c not in ["Ready Qty", "Status"]] + ["_original_idx"]
 
-    # EDITABLE TABLE
     st.write("### 🚀 Active Tasks")
     edited_active = st.data_editor(
         df_active,
@@ -335,7 +369,6 @@ def manage_tab(tab_name, worksheet_name):
         key=f"act_{worksheet_name}"
     )
 
-    # SAVE LOGIC
     clean_active = df_active.drop(columns=["_original_idx"], errors='ignore')
     clean_edited = edited_active.drop(columns=["_original_idx"], errors='ignore')
 
@@ -343,12 +376,10 @@ def manage_tab(tab_name, worksheet_name):
         if st.button(f"💾 Save {tab_name}", key=f"sv_{worksheet_name}"):
             save_smart_update(data, edited_active, worksheet_name)
 
-    # HISTORY
     st.divider()
     with st.expander("✅ Completed History"):
         st.dataframe(df_comp.drop(columns=["_original_idx"], errors='ignore'), use_container_width=True)
 
-    # ADD ENTRY FORM
     if st.session_state["role"] not in ["Production", "Packing"]:
         st.divider()
         with st.expander(f"➕ Add Entry"):
