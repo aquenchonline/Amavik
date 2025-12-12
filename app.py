@@ -117,16 +117,12 @@ def manage_tab(tab_name, worksheet_name):
     # --- ADD PARTY NAME HANDLING FOR PACKING ---
     if worksheet_name == "Packing":
         if "Party Name" not in data.columns:
-            data["Party Name"] = "" # Create column if missing in old data
+            data["Party Name"] = "" 
         
-        # REORDER COLUMNS: Force "Party Name" to be after "Item Name"
-        # We define the specific visual order we want
+        # Reorder columns for Packing
         desired_order = ["Date", "Order Date", "Order Priority", "Item Name", "Party Name", "Qty", "Logo", "Bottom Print", "Box", "Remarks", "Ready Qty", "Status"]
-        
-        # Keep any extra columns that might exist but aren't in our list (like _original_idx later)
         current_cols = data.columns.tolist()
         final_order = [c for c in desired_order if c in current_cols] + [c for c in current_cols if c not in desired_order]
-        
         data = data[final_order]
 
     data["Status"] = data["Status"].fillna("Pending").replace("", "Pending")
@@ -135,21 +131,65 @@ def manage_tab(tab_name, worksheet_name):
     if not data.empty:
         data['_original_idx'] = data.index
 
-    # 2. DATE FILTER UI
-    col_filter, col_space = st.columns([1, 2])
-    with col_filter:
+    # -----------------------------------------------------------
+    # 2. ADVANCED FILTERS (Date + Item + Party)
+    # -----------------------------------------------------------
+    
+    # Get unique values for filters from the ACTUAL data
+    unique_items = sorted(data["Item Name"].astype(str).unique().tolist()) if "Item Name" in data.columns else []
+    
+    # Check if Party Name exists and has data
+    unique_parties = []
+    if "Party Name" in data.columns:
+        unique_parties = sorted(data["Party Name"].astype(str).unique().tolist())
+
+    # Create Filter UI Layout
+    c1, c2, c3 = st.columns(3)
+    
+    with c1:
         date_filter = st.selectbox(
-            "📅 Date Filter", 
+            "📅 Date Range", 
             ["All", "Today", "Yesterday", "Prev 7 Days", "Prev 15 Days", "Prev 30 Days", "Prev All", 
              "Next 7 Days", "Next 15 Days", "Next 30 Days"],
             index=0,
-            key=f"filter_{worksheet_name}"
+            key=f"filter_date_{worksheet_name}"
         )
+    
+    with c2:
+        item_filter = st.multiselect(
+            "📦 Item Name",
+            options=unique_items,
+            placeholder="All Items",
+            key=f"filter_item_{worksheet_name}"
+        )
+        
+    with c3:
+        if unique_parties:
+            party_filter = st.multiselect(
+                "busts_in_silhouette: Party Name",
+                options=unique_parties,
+                placeholder="All Parties",
+                key=f"filter_party_{worksheet_name}"
+            )
+        else:
+            party_filter = []
 
-    # Apply Filter
+    # --- APPLY FILTERS ---
+    
+    # 1. Date Filter
     filtered_data = filter_by_date(data, date_filter)
 
+    # 2. Item Filter
+    if item_filter:
+        filtered_data = filtered_data[filtered_data["Item Name"].isin(item_filter)]
+
+    # 3. Party Filter
+    if party_filter and "Party Name" in filtered_data.columns:
+        filtered_data = filtered_data[filtered_data["Party Name"].isin(party_filter)]
+
+    # -----------------------------------------------------------
     # 3. SPLIT ACTIVE / COMPLETED
+    # -----------------------------------------------------------
     if not filtered_data.empty:
         active_mask = filtered_data["Status"] != "Complete"
         df_active_view = filtered_data[active_mask].copy()
@@ -161,13 +201,11 @@ def manage_tab(tab_name, worksheet_name):
     # 4. ACTIVE TASKS TABLE
     st.write("### 🚀 Active Tasks")
     
-    # Define Editable Columns
     all_columns = [c for c in data.columns if c != "_original_idx"]
     
     if st.session_state["role"] == "Admin":
         disabled_cols = ["_original_idx"]
     else:
-        # User can only edit Ready Qty and Status
         disabled_cols = [c for c in all_columns if c not in ["Ready Qty", "Status"]]
         disabled_cols.append("_original_idx")
 
@@ -186,7 +224,7 @@ def manage_tab(tab_name, worksheet_name):
         key=f"active_{worksheet_name}"
     )
 
-    # 5. SAVE LOGIC (SMART MERGE)
+    # 5. SAVE LOGIC
     df_active_clean = df_active_view.drop(columns=["_original_idx"], errors='ignore')
     df_edited_clean = edited_active_df.drop(columns=["_original_idx"], errors='ignore')
 
@@ -194,7 +232,7 @@ def manage_tab(tab_name, worksheet_name):
         st.warning("⚠️ Changes detected.")
         if st.button(f"💾 Save Changes to {tab_name}", key=f"save_{worksheet_name}"):
             try:
-                # Update Existing Rows
+                # Update Rows
                 for i, row in edited_active_df.iterrows():
                     idx = row.get("_original_idx")
                     
@@ -207,7 +245,7 @@ def manage_tab(tab_name, worksheet_name):
                         new_row_data = {col: row[col] for col in all_columns if col in row}
                         data = pd.concat([data, pd.DataFrame([new_row_data])], ignore_index=True)
 
-                # Handle Deletions (Admin only)
+                # Handle Deletions (Admin)
                 if st.session_state["role"] == "Admin":
                     original_ids = df_active_view["_original_idx"].dropna()
                     current_ids = edited_active_df["_original_idx"].dropna()
@@ -215,10 +253,10 @@ def manage_tab(tab_name, worksheet_name):
                     if not deleted_ids.empty:
                         data = data.drop(deleted_ids)
 
-                # Clean and Upload
+                # Save
                 final_upload = data.drop(columns=["_original_idx"], errors='ignore')
                 conn.update(spreadsheet=SHEET_URL, worksheet=worksheet_name, data=final_upload)
-                st.success("✅ Main Database Updated!")
+                st.success("✅ Database Updated!")
                 st.cache_data.clear()
                 time.sleep(1)
                 st.rerun()
@@ -268,7 +306,6 @@ def manage_tab(tab_name, worksheet_name):
                     with c1:
                         date_val = st.date_input("Date", key="p_date")
                         item = st.text_input("Item Name", key="p_item")
-                        # 👇 Added Party Name Here
                         party = st.text_input("Party Name", key="p_party")
                     with c2:
                         order_date = st.date_input("Order Date (Manual)", key="p_odate")
