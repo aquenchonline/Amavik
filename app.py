@@ -8,10 +8,10 @@ from datetime import datetime
 # ------------------------------------------------------------------
 st.set_page_config(page_title="ERP System", layout="wide")
 
-# 👇 YOUR SPECIFIC SHEET URL IS NOW HARDCODED HERE
+# 👇 YOUR SHEET URL
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1S6xS6hcdKSPtzKxCL005GwvNWQNspNffNveI3P9zCgw/edit"
 
-st.title("🏭 Amavik ERP")
+st.title("🏭 Mini ERP System")
 st.markdown("Manage Production, Packing, Store, and Ecommerce data.")
 
 # ------------------------------------------------------------------
@@ -27,19 +27,17 @@ except Exception as e:
 # 2. REUSABLE FUNCTION TO HANDLE DATA
 # ------------------------------------------------------------------
 def manage_tab(tab_name, worksheet_name):
-    """
-    Reads and writes data for a specific worksheet.
-    """
     st.header(f"{tab_name} Department")
 
-    # READ DATA
+    # READ DATA (Updated with ttl=0 to disable caching)
     try:
-        data = conn.read(spreadsheet=SHEET_URL, worksheet=worksheet_name)
+        # 👇 FIX IS HERE: ttl=0 forces it to download fresh data every time
+        data = conn.read(spreadsheet=SHEET_URL, worksheet=worksheet_name, ttl=0)
+        
         # Check if data is empty or None
         if data is None or data.empty:
             data = pd.DataFrame(columns=["Date", "Item", "Quantity", "Notes"])
     except Exception:
-        # If the sheet is brand new or has errors, start with empty structure
         data = pd.DataFrame(columns=["Date", "Item", "Quantity", "Notes"])
 
     # Show Data Table
@@ -47,7 +45,6 @@ def manage_tab(tab_name, worksheet_name):
 
     # WRITE DATA (FORM)
     with st.expander(f"➕ Add Entry to {tab_name}"):
-        # We need a unique key for every form so Streamlit doesn't get confused
         with st.form(key=f"form_{worksheet_name}"):
             col1, col2 = st.columns(2)
             with col1:
@@ -72,7 +69,7 @@ def manage_tab(tab_name, worksheet_name):
                             "Notes": notes
                         }])
                         
-                        # Append new row to existing data
+                        # Append new row
                         updated_df = pd.concat([data, new_data], ignore_index=True)
                         
                         # Update Google Sheet
@@ -80,10 +77,10 @@ def manage_tab(tab_name, worksheet_name):
                         
                         st.success(f"✅ Added to {tab_name}!")
                         
-                        # Wait 1 second then reload to show new data
-                        import time
-                        time.sleep(1)
+                        # Clear cache effectively by rerunning immediately
+                        st.cache_data.clear()
                         st.rerun()
+                        
                     except Exception as e:
                         st.error(f"Error saving data: {e}")
 
@@ -91,11 +88,8 @@ def manage_tab(tab_name, worksheet_name):
 # 3. MAIN APP LAYOUT (TABS)
 # ------------------------------------------------------------------
 
-# Create the visual tabs
 t1, t2, t3, t4 = st.tabs(["🔨 Production", "📦 Packing", "jg Store", "🛒 Ecommerce"])
 
-# Run the function for each tab
-# Ensure your Google Sheet has tabs named exactly: "Production", "Packing", "Store", "Ecommerce"
 with t1:
     manage_tab("Production", "Production") 
 
