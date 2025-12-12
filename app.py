@@ -2,6 +2,7 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import time
+from datetime import date, timedelta
 
 # ------------------------------------------------------------------
 # CONFIGURATION
@@ -58,6 +59,44 @@ except Exception as e:
     st.stop()
 
 # ------------------------------------------------------------------
+# HELPER: DATE FILTER LOGIC
+# ------------------------------------------------------------------
+def filter_by_date(df, filter_option):
+    if df.empty:
+        return df
+    
+    # Ensure Date column is datetime
+    df["temp_date"] = pd.to_datetime(df["Date"], errors='coerce').dt.date
+    today = date.today()
+    
+    if filter_option == "All":
+        return df.drop(columns=["temp_date"])
+    
+    mask = pd.Series([False] * len(df))
+    
+    if filter_option == "Today":
+        mask = df["temp_date"] == today
+    elif filter_option == "Yesterday":
+        mask = df["temp_date"] == (today - timedelta(days=1))
+    elif filter_option == "Prev 7 Days":
+        mask = (df["temp_date"] >= (today - timedelta(days=7))) & (df["temp_date"] < today)
+    elif filter_option == "Prev 15 Days":
+        mask = (df["temp_date"] >= (today - timedelta(days=15))) & (df["temp_date"] < today)
+    elif filter_option == "Prev 30 Days":
+        mask = (df["temp_date"] >= (today - timedelta(days=30))) & (df["temp_date"] < today)
+    elif filter_option == "Prev All":
+        mask = df["temp_date"] < today
+    elif filter_option == "Next 7 Days":
+        mask = (df["temp_date"] > today) & (df["temp_date"] <= (today + timedelta(days=7)))
+    elif filter_option == "Next 15 Days":
+        mask = (df["temp_date"] > today) & (df["temp_date"] <= (today + timedelta(days=15)))
+    elif filter_option == "Next 30 Days":
+        mask = (df["temp_date"] > today) & (df["temp_date"] <= (today + timedelta(days=30)))
+
+    # Drop temp column and return filtered
+    return df[mask].drop(columns=["temp_date"])
+
+# ------------------------------------------------------------------
 # CORE FUNCTION: MANAGE DATA (VIEW & EDIT)
 # ------------------------------------------------------------------
 def manage_tab(tab_name, worksheet_name):
@@ -71,121 +110,153 @@ def manage_tab(tab_name, worksheet_name):
     except:
         data = pd.DataFrame()
 
-    # Ensure Essential Columns Exist
+    # Ensure Essential Columns
     if "Ready Qty" not in data.columns:
         data["Ready Qty"] = 0
-    
     if "Status" not in data.columns:
         data["Status"] = "Pending"
-
-    # Fill empty status with "Pending" for logic consistency
-    data["Status"] = data["Status"].fillna("Pending")
-    data["Status"] = data["Status"].replace("", "Pending")
-
-    # -----------------------------------------------------------
-    # SPLIT DATA: ACTIVE vs COMPLETED
-    # -----------------------------------------------------------
-    # Active: Pending, Next Day, or anything NOT "Complete"
-    active_mask = data["Status"] != "Complete"
-    df_active = data[active_mask].copy()
     
-    # Completed: Only "Complete"
-    df_completed = data[~active_mask].copy()
+    data["Status"] = data["Status"].fillna("Pending").replace("", "Pending")
 
-    # -----------------------------------------------------------
-    # VIEW 1: ACTIVE TASKS (EDITABLE)
-    # -----------------------------------------------------------
-    st.write("### 🚀 Active Tasks (Pending / Next Day)")
+    # --- ADD TRACKING ID FOR SAFE EDITING ---
+    # We add a temporary index column to track rows even after filtering
+    if not data.empty:
+        data['_original_idx'] = data.index
 
-    all_columns = data.columns.tolist()
-    
-    # Permission Logic
-    if st.session_state["role"] == "Admin":
-        disabled_cols = [] # Admin edits everything
-    else:
-        # Standard Users can ONLY edit "Ready Qty" and "Status"
-        # We disable all columns EXCEPT those two
-        disabled_cols = [col for col in all_columns if col not in ["Ready Qty", "Status"]]
-
-    # Configure the Status Column as a Dropdown
-    column_config = {
-        "Status": st.column_config.SelectboxColumn(
-            "Status",
-            options=["Pending", "Next Day", "Complete"],
-            default="Pending",
-            required=True,
+    # 2. DATE FILTER UI
+    col_filter, col_space = st.columns([1, 2])
+    with col_filter:
+        date_filter = st.selectbox(
+            "📅 Date Filter", 
+            ["All", "Today", "Yesterday", "Prev 7 Days", "Prev 15 Days", "Prev 30 Days", "Prev All", 
+             "Next 7 Days", "Next 15 Days", "Next 30 Days"],
+            index=0
         )
+
+    # Apply Filter
+    filtered_data = filter_by_date(data, date_filter)
+
+    # 3. SPLIT ACTIVE / COMPLETED
+    active_mask = filtered_data["Status"] != "Complete"
+    df_active_view = filtered_data[active_mask].copy()
+    df_completed_view = filtered_data[~active_mask].copy()
+
+    # 4. ACTIVE TASKS TABLE
+    st.write("### 🚀 Active Tasks")
+    
+    # Define Editable Columns
+    all_columns = [c for c in data.columns if c != "_original_idx"]
+    if st.session_state["role"] == "Admin":
+        disabled_cols = ["_original_idx"]
+    else:
+        # User can only edit Ready Qty and Status
+        disabled_cols = [c for c in all_columns if c not in ["Ready Qty", "Status"]]
+        disabled_cols.append("_original_idx")
+
+    # Column Config for Status Dropdown
+    column_config = {
+        "Status": st.column_config.SelectboxColumn("Status", options=["Pending", "Next Day", "Complete"], required=True),
+        "_original_idx": None # Hide this column
     }
 
+    # EDITOR
     edited_active_df = st.data_editor(
-        df_active,
+        df_active_view,
         disabled=disabled_cols,
         column_config=column_config,
         use_container_width=True,
         num_rows="dynamic" if st.session_state["role"] == "Admin" else "fixed",
-        key=f"editor_{worksheet_name}"
+        key=f"active_{worksheet_name}"
     )
 
-    # SAVE BUTTON LOGIC
-    # We compare the edited active rows with the original active rows
-    if not df_active.equals(edited_active_df):
-        st.warning("⚠️ Changes detected! Click Save to update.")
+    # 5. SAVE LOGIC (SMART MERGE)
+    if not df_active_view.drop(columns=["_original_idx"], errors='ignore').equals(edited_active_df.drop(columns=["_original_idx"], errors='ignore')):
+        st.warning("⚠️ Changes detected.")
         if st.button(f"💾 Save Changes to {tab_name}", key=f"save_{worksheet_name}"):
             try:
-                # RECOMBINE: Edited Active Rows + Original Completed Rows
-                # This ensures we don't lose the hidden completed data
-                final_df = pd.concat([edited_active_df, df_completed], ignore_index=True)
-                
-                conn.update(spreadsheet=SHEET_URL, worksheet=worksheet_name, data=final_df)
-                st.success("✅ Saved! If you marked items as 'Complete', they will move to the table below.")
+                # 1. Update Existing Rows
+                # Iterate through edited rows and update the main 'data' dataframe using '_original_idx'
+                for i, row in edited_active_df.iterrows():
+                    idx = row.get("_original_idx")
+                    # If idx is valid (not NaN), it's an existing row
+                    if pd.notna(idx) and idx in data.index:
+                        # Update all columns for this row in the main data
+                        for col in all_columns:
+                            data.at[idx, col] = row[col]
+                    
+                    # If idx is NaN, it's a NEW row added via the UI (Admin only)
+                    elif pd.isna(idx):
+                        new_row_data = {col: row[col] for col in all_columns}
+                        data = pd.concat([data, pd.DataFrame([new_row_data])], ignore_index=True)
+
+                # 2. Handle Deletions (Admin only)
+                # If rows were present in view but missing in edited, they were deleted
+                if st.session_state["role"] == "Admin":
+                    original_ids_in_view = df_active_view["_original_idx"].dropna()
+                    current_ids_in_edit = edited_active_df["_original_idx"].dropna()
+                    deleted_ids = original_ids_in_view[~original_ids_in_view.isin(current_ids_in_edit)]
+                    
+                    if not deleted_ids.empty:
+                        data = data.drop(deleted_ids)
+
+                # 3. Clean and Upload
+                if "_original_idx" in data.columns:
+                    final_upload = data.drop(columns=["_original_idx"])
+                else:
+                    final_upload = data
+
+                conn.update(spreadsheet=SHEET_URL, worksheet=worksheet_name, data=final_upload)
+                st.success("✅ Main Database Updated!")
                 st.cache_data.clear()
-                time.sleep(1.5)
+                time.sleep(1)
                 st.rerun()
+
             except Exception as e:
                 st.error(f"Error saving: {e}")
 
-    # -----------------------------------------------------------
-    # VIEW 2: COMPLETED TASKS (READ ONLY for Standard, Editable for Admin)
-    # -----------------------------------------------------------
+    # 6. COMPLETED TASKS (History)
     st.divider()
     with st.expander("✅ Completed History (Click to View)", expanded=False):
-        st.write("These items are marked as **Complete**.")
-        
-        # Admin can edit history if needed (to revert status), others just view
         if st.session_state["role"] == "Admin":
-            edited_completed_df = st.data_editor(
-                df_completed,
+             # Admin can edit history to fix mistakes
+             edited_history_df = st.data_editor(
+                df_completed_view,
                 column_config=column_config,
                 use_container_width=True,
-                key=f"history_{worksheet_name}"
+                key=f"hist_{worksheet_name}"
             )
-            # Save button for history table
-            if not df_completed.equals(edited_completed_df):
-                if st.button(f"💾 Update History for {tab_name}"):
-                    final_df = pd.concat([df_active, edited_completed_df], ignore_index=True)
-                    conn.update(spreadsheet=SHEET_URL, worksheet=worksheet_name, data=final_df)
-                    st.cache_data.clear()
-                    st.rerun()
+             # Logic to save history edits (simplified for brevity: overwrite matched rows)
+             if not df_completed_view.equals(edited_history_df):
+                 if st.button(f"💾 Update History for {tab_name}"):
+                     for i, row in edited_history_df.iterrows():
+                        idx = row.get("_original_idx")
+                        if pd.notna(idx) and idx in data.index:
+                             for col in all_columns:
+                                data.at[idx, col] = row[col]
+                     
+                     if "_original_idx" in data.columns:
+                        final_upload = data.drop(columns=["_original_idx"])
+                     else:
+                        final_upload = data
+                     
+                     conn.update(spreadsheet=SHEET_URL, worksheet=worksheet_name, data=final_upload)
+                     st.cache_data.clear()
+                     st.rerun()
         else:
-            # Standard users just see a static table
-            st.dataframe(df_completed, use_container_width=True)
+            st.dataframe(df_completed_view.drop(columns=["_original_idx"], errors='ignore'), use_container_width=True)
 
-    # -----------------------------------------------------------
-    # ADD NEW ENTRY FORM (UNCHANGED)
-    # -----------------------------------------------------------
+    # 7. ADD NEW ENTRY FORM
     restricted_roles = ["Production", "Packing"]
-    
     if st.session_state["role"] not in restricted_roles:
-        
         st.divider()
         with st.expander(f"➕ Add New Entry to {tab_name}"):
             with st.form(key=f"form_{worksheet_name}"):
                 
-                # === FORM FOR PACKING ===
+                # PACKING FORM
                 if worksheet_name == "Packing":
                     c1, c2, c3 = st.columns(3)
                     with c1:
-                        date = st.date_input("Date", key="p_date")
+                        date_val = st.date_input("Date", key="p_date")
                         item = st.text_input("Item Name", key="p_item")
                         logo = st.selectbox("Logo", ["W/O Logo", "Laser", "Pad"], key="p_logo")
                     with c2:
@@ -207,18 +278,20 @@ def manage_tab(tab_name, worksheet_name):
                         if not item:
                             st.warning("Item Name Required")
                         else:
+                            # Drop temporary index before saving new entry
+                            clean_data = data.drop(columns=["_original_idx"], errors='ignore')
                             new_row = pd.DataFrame([{
-                                "Date": str(date), "Order Date": str(order_date), "Order Priority": priority,
+                                "Date": str(date_val), "Order Date": str(order_date), "Order Priority": priority,
                                 "Item Name": item, "Qty": qty, "Logo": logo, "Bottom Print": bottom, 
                                 "Box": box, "Remarks": remarks, "Ready Qty": ready_qty_init, "Status": status_init
                             }])
-                            save_new_entry(worksheet_name, data, new_row)
+                            save_new_entry(worksheet_name, clean_data, new_row)
 
-                # === FORM FOR ALL OTHERS ===
+                # STANDARD FORM
                 else:
                     c1, c2 = st.columns(2)
                     with c1:
-                        date = st.date_input("Date", key=f"d_{worksheet_name}")
+                        date_val = st.date_input("Date", key=f"d_{worksheet_name}")
                         item = st.text_input("Item Name", key=f"i_{worksheet_name}")
                     with c2:
                         qty = st.number_input("Quantity", min_value=0, step=1, key=f"q_{worksheet_name}")
@@ -234,13 +307,14 @@ def manage_tab(tab_name, worksheet_name):
                         if not item:
                             st.warning("Item Name Required")
                         else:
+                            clean_data = data.drop(columns=["_original_idx"], errors='ignore')
                             new_row = pd.DataFrame([{
-                                "Date": str(date), "Item": item, "Quantity": qty, 
+                                "Date": str(date_val), "Item": item, "Quantity": qty, 
                                 "Notes": notes, "Ready Qty": ready_qty_init, "Status": status_init
                             }])
-                            save_new_entry(worksheet_name, data, new_row)
+                            save_new_entry(worksheet_name, clean_data, new_row)
     else:
-        st.info(f"ℹ️ {st.session_state['role']} Users can View and Update 'Ready Qty' & 'Status'. New entries restricted.")
+        st.info(f"ℹ️ {st.session_state['role']} Users: View, Update Ready Qty & Status only.")
 
 def save_new_entry(sheet_name, old_df, new_row):
     try:
@@ -282,4 +356,3 @@ else:
     elif selected_tab == "Configuration":
         st.header("⚙️ System Configuration")
         st.info("Only Amar (Admin) can see this.")
-        st.text_input("Example Admin Setting", "Default Value")
