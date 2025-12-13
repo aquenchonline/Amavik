@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 import time
 from datetime import date, timedelta, datetime
 import math
+import numpy as np
 
 # ------------------------------------------------------------------
 # 1. PAGE CONFIGURATION
@@ -129,25 +130,16 @@ st.markdown("""
         box-shadow: 0 0 0 3px rgba(93, 135, 255, 0.1);
     }
     
-    /* PAGINATION BUTTONS (Arrows) */
+    /* PAGINATION BUTTONS */
     .pagination-btn button {
         background-color: #ffffff !important;
         color: #5A6A85 !important;
         border: 1px solid #DFE5EF !important;
-        border-radius: 50% !important; /* Circular buttons */
-        width: 35px !important;
-        height: 35px !important;
-        font-size: 1.2rem !important;
-        padding: 0 !important;
+        border-radius: 6px !important;
+        height: 2em !important;
+        font-size: 0.8rem !important;
+        padding: 0px 10px !important;
         box-shadow: none !important;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    .pagination-btn button:hover {
-        background-color: #F4F7FE !important;
-        color: #5D87FF !important;
-        border-color: #5D87FF !important;
     }
 
     /* ======================================= */
@@ -206,9 +198,24 @@ st.markdown("""
             flex: 0 0 50% !important;
             min-width: 50% !important;
         }
+        /* FIXED SLIDING TABS WITH SPACING */
+        .stTabs [data-baseweb="tab-list"] {
+            display: flex !important;
+            flex-wrap: nowrap !important;
+            overflow-x: auto !important;
+            white-space: nowrap !important;
+            gap: 20px !important;  
+            padding-bottom: 5px; 
+            padding-left: 5px;
+            scrollbar-width: none; 
+        }
+        .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar { display: none; }
+        
         .stTabs [data-baseweb="tab"] {
-            font-size: 0.75rem;
-            padding: 5px 10px;
+            flex: 0 0 auto !important;
+            width: auto !important;
+            font-size: 0.8rem;
+            padding: 5px 15px;
         }
     }
 </style>
@@ -304,12 +311,15 @@ def safe_float(val):
         return float(pd.to_numeric(val, errors='coerce') or 0.0)
     except: return 0.0
 
+# 🧠 SMART FORMATTING: Int if whole, else 1 decimal
 def smart_format(val):
     try:
         num = float(val)
-        if num.is_integer(): return int(num)
-        return round(num, 2)
-    except: return 0
+        if num.is_integer():
+            return int(num)
+        return round(num, 1) # Max 1 decimal
+    except:
+        return 0
 
 def filter_by_date(df, filter_option, date_col_name="Date"):
     if df.empty: return df
@@ -404,10 +414,10 @@ def color_status(val):
         return 'background-color: #EBF3FE; color: #5D87FF; font-weight: 600; padding: 4px 10px; border-radius: 20px;'
     return ''
 
-def render_styled_table(df, key_prefix, editable=False, decimal_format=None):
+def render_styled_table(df, key_prefix, editable=False):
     """
     Renders a dataframe with Pagination (10 rows/page) and Search.
-    decimal_format: String like "%.1f" to force decimals (used for Store)
+    No forced strict decimal formatting here, lets smart data take over.
     """
     if df.empty:
         st.info("No data available.")
@@ -423,6 +433,7 @@ def render_styled_table(df, key_prefix, editable=False, decimal_format=None):
     if search_query:
         mask = df_filtered.astype(str).apply(lambda x: x.str.contains(search_query, case=False, na=False)).any(axis=1)
         df_filtered = df_filtered[mask]
+        # Reset pagination on search
         if f"page_{key_prefix}" in st.session_state:
              st.session_state[f"page_{key_prefix}"] = 0
 
@@ -455,11 +466,6 @@ def render_styled_table(df, key_prefix, editable=False, decimal_format=None):
     for dc in date_cols:
         st_config[dc] = st.column_config.DateColumn(dc, format="YYYY-MM-DD")
     
-    if decimal_format:
-        num_cols = df_page.select_dtypes(include=['float', 'int']).columns
-        for nc in num_cols:
-             st_config[nc] = st.column_config.NumberColumn(nc, format=decimal_format)
-
     # --- 4. RENDER TABLE ---
     result = None
     if not editable:
@@ -538,7 +544,7 @@ def render_task_cards(df_display, date_col, role_name, data, worksheet_name):
                 c_head, c_del = st.columns([5, 1])
                 with c_head:
                     st.caption(f"{emoji_prio} Priority {prio} | {row.get(date_col, '-')}")
-                # DELETE BUTTON REMOVED from Cards as requested
+                # NO DELETE BUTTON
 
                 if worksheet_name == "Packing":
                     party_name = str(row.get('Party Name', '')).upper()
@@ -652,19 +658,17 @@ def render_add_task_form(data, worksheet_name):
                         save_new_row(data, new_task, worksheet_name)
             else:
                 c1, c2, c3 = st.columns(3)
-                with c1: 
-                    n_date = st.date_input("Order Date")
-                    n_party = st.text_input("Party Name")
-                    n_logo = st.selectbox("Logo", ["W/O Logo", "Laser", "Pad"])
-                with c2:
-                    n_item = st.text_input("Item Name")
-                    n_qty = st.number_input("Order Qty", min_value=1.0, step=0.01)
-                    n_bot = st.selectbox("Bottom Print", ["No", "Laser", "Pad"])
-                with c3:
-                    n_prio = st.number_input("Priority", min_value=1, value=1)
-                    n_box = st.selectbox("Box", ["Loose", "Brown Box", "White Box", "Box"])
-                    n_rem = st.text_input("Remarks")
-                
+                with c1: n_date = st.date_input("Order Date")
+                with c2: n_party = st.text_input("Party Name")
+                with c3: n_logo = st.selectbox("Logo", ["W/O Logo", "Laser", "Pad"])
+                c4, c5 = st.columns(2)
+                with c4: n_item = st.text_input("Item Name")
+                with c5: n_qty = st.number_input("Order Qty", min_value=1.0, step=0.01)
+                c6, c7 = st.columns(2)
+                with c6: n_bot = st.selectbox("Bottom Print", ["No", "Laser", "Pad"])
+                with c7: n_prio = st.number_input("Priority", min_value=1, value=1)
+                n_box = st.selectbox("Box", ["Loose", "Brown Box", "White Box", "Box"])
+                n_rem = st.text_input("Remarks")
                 if st.form_submit_button("🚀 Assign"):
                     if not n_item: st.warning("Item Name Required")
                     else:
@@ -725,7 +729,10 @@ def manage_tab(tab_name, worksheet_name):
                     inject_enter_key_navigation()
 
             if not data.empty:
-                if "Qty" in data.columns: data["Qty"] = pd.to_numeric(data["Qty"], errors='coerce').fillna(0).astype(int)
+                # Apply smart formatting
+                for col in data.select_dtypes(include=['float', 'int']).columns:
+                     data[col] = data[col].apply(smart_format)
+                     
                 if "Date" in data.columns: data["Date"] = pd.to_datetime(data["Date"], errors='coerce')
                 
                 edited = render_styled_table(data, "order", editable=True)
@@ -754,9 +761,9 @@ def manage_tab(tab_name, worksheet_name):
                     if "Order Received" not in base_pivot.columns: base_pivot["Order Received"] = 0
                     if "Dispatch" not in base_pivot.columns: base_pivot["Dispatch"] = 0
                     base_pivot["Pending Balance"] = base_pivot["Order Received"] - base_pivot["Dispatch"]
-                    base_pivot = base_pivot.round(2)
-                    cols_to_int = ["Order Received", "Dispatch", "Pending Balance"]
-                    for c in cols_to_int: base_pivot[c] = base_pivot[c].astype(int)
+                    
+                    for c in ["Order Received", "Dispatch", "Pending Balance"]: 
+                        base_pivot[c] = base_pivot[c].apply(smart_format)
 
                     if view_mode == "Matrix View":
                         matrix = base_pivot.pivot_table(index="Item Name", columns="Party Name", values="Pending Balance", aggfunc="sum", fill_value=0, margins=True, margins_name="Total")
@@ -770,7 +777,7 @@ def manage_tab(tab_name, worksheet_name):
         return 
 
     # ===============================================================
-    # B. PRODUCTION & PACKING
+    # B. PRODUCTION & PACKING (4 TABS REDESIGN)
     # ===============================================================
     if worksheet_name in ["Packing", "Production"]:
         c_head, c_btn = st.columns([6, 1])
@@ -795,7 +802,12 @@ def manage_tab(tab_name, worksheet_name):
         
         if date_col in data.columns: data["_dt_obj"] = pd.to_datetime(data[date_col], errors='coerce').dt.date
         else: data["_dt_obj"] = date.today()
+        
+        # Smart Format Numbers
         data[prio_col] = pd.to_numeric(data[prio_col], errors='coerce').fillna(999)
+        qty_key = "Quantity" if worksheet_name == "Production" else "Qty"
+        if qty_key in data.columns: data[qty_key] = data[qty_key].apply(smart_format)
+        if "Ready Qty" in data.columns: data["Ready Qty"] = data["Ready Qty"].apply(smart_format)
 
         # IF EDITING, SHOW FORM ONLY
         if st.session_state["edit_idx"] is not None:
@@ -881,21 +893,22 @@ def manage_tab(tab_name, worksheet_name):
                     df_calc = filtered_df.copy()
                     df_calc["Qty"] = pd.to_numeric(df_calc["Qty"], errors="coerce").fillna(0)
                     
-                    # Store Logic with Type
-                    stock_summary = df_calc.groupby("Item Name").agg(
-                        Type=('Type', 'first'),
-                        Inward=('Qty', lambda x: x[df_calc.loc[x.index, "Transaction Type"] == "Inward"].sum()),
-                        Outward=('Qty', lambda x: x[df_calc.loc[x.index, "Transaction Type"] == "Outward"].sum())
-                    ).reset_index()
+                    stock_summary = df_calc.groupby("Item Name").apply(lambda x: pd.Series({
+                        "Type": x["Type"].iloc[0] if not x["Type"].empty else "", 
+                        "Inward": x[x["Transaction Type"] == "Inward"]["Qty"].sum(), 
+                        "Outward": x[x["Transaction Type"] == "Outward"]["Qty"].sum()
+                    })).reset_index()
                     
                     stock_summary["Balance"] = stock_summary["Inward"] - stock_summary["Outward"]
-                    render_styled_table(stock_summary.round(1), "stock", decimal_format="%.1f")
+                    stock_summary = stock_summary.round(1) # Round for summary
+                    render_styled_table(stock_summary, "stock", decimal_format="%.1f")
 
             if st.session_state["role"] == "Store":
                 st.write("### 📋 Transaction Log")
                 if filtered_df.empty: df_display = pd.DataFrame(columns=data.columns).drop(columns=["_original_idx"], errors="ignore")
                 else: df_display = filtered_df.copy()
-                if "Qty" in df_display.columns: df_display["Qty"] = pd.to_numeric(df_display["Qty"], errors='coerce').fillna(0)
+                
+                if "Qty" in df_display.columns: df_display["Qty"] = pd.to_numeric(df_display["Qty"], errors='coerce').fillna(0).round(1)
                 if "Date Of Entry" in df_display.columns: df_display["Date Of Entry"] = pd.to_datetime(df_display["Date Of Entry"], errors='coerce')
                 
                 edited_df = render_styled_table(df_display, "store_log", editable=True, decimal_format="%.1f")
@@ -939,17 +952,12 @@ def manage_tab(tab_name, worksheet_name):
                 mask_plan = (packing_data["dt_obj"] >= (date.today() - timedelta(days=7))) & (packing_data["dt_obj"] <= (date.today() + timedelta(days=5)))
                 plan_df = packing_data[mask_plan].copy()
                 
-                # Cleanup Duplicate Party Name
-                cols_to_show = []
-                if d_col in plan_df.columns: cols_to_show.append(d_col)
-                if "Party Name" in plan_df.columns: cols_to_show.append("Party Name")
-                if "Item Name" in plan_df.columns: cols_to_show.append("Item Name")
-                if "Qty" in plan_df.columns: cols_to_show.append("Qty")
+                # Deduplicate Party Name logic
+                cols = []
+                for c in [d_col, "Party Name", "Item Name", "Qty"]:
+                    if c in plan_df.columns: cols.append(c)
                 
-                # Remove duplicates from list if any
-                cols_to_show = list(dict.fromkeys(cols_to_show))
-                
-                final_plan = plan_df[cols_to_show].copy()
+                final_plan = plan_df[cols].copy()
                 if "Qty" in final_plan.columns: 
                     final_plan["Qty"] = pd.to_numeric(final_plan["Qty"], errors='coerce').fillna(0).astype(float).round(1)
                 
@@ -1075,10 +1083,9 @@ def manage_tab(tab_name, worksheet_name):
 
             is_editable = (st.session_state["role"] == "Ecommerce")
             if is_editable:
-                cols_to_int_ecom = ["Today's Order", "Today's Dispatch", "Return"]
-                for c in cols_to_int_ecom:
+                for c in ["Today's Order", "Today's Dispatch", "Return"]:
                     if c in display_df.columns:
-                        display_df[c] = pd.to_numeric(display_df[c], errors='coerce').fillna(0).astype(int)
+                        display_df[c] = pd.to_numeric(display_df[c], errors='coerce').apply(smart_format)
 
                 edited_df = render_styled_table(display_df, "eco_log", editable=True)
                 if edited_df is not None:
