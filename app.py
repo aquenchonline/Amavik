@@ -72,12 +72,33 @@ st.markdown("""
     /* --------------------------------------- */
     @media (max-width: 768px) {
         
-        /* 1. Make Tabs Much Smaller for Mobile */
+        /* 1. SLIDING TABS LOGIC */
+        .stTabs [data-baseweb="tab-list"] {
+            display: flex !important;
+            flex-wrap: nowrap !important;   /* Stop wrapping */
+            overflow-x: auto !important;    /* Allow horizontal scroll */
+            white-space: nowrap !important;
+            gap: 5px !important;
+            padding-bottom: 5px; /* Space for scroll */
+            
+            /* Hide Scrollbar but keep functionality */
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none; /* IE */
+        }
+        
+        /* Hide scrollbar for Chrome/Safari */
+        .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar { 
+            display: none; 
+        }
+
         .stTabs [data-baseweb="tab"] {
-            font-size: 0.6rem !important;  /* Tiny Font */
-            padding: 2px 4px !important;   /* Very Tight Padding */
-            height: 30px !important;
+            flex: 0 0 auto !important;      /* Prevent shrinking/growing */
+            width: 23% !important;          /* Force 4 tabs in view (4x23 = 92%) */
+            font-size: 0.7rem !important;
+            padding: 4px 2px !important;
+            height: 35px !important;
             min-width: auto !important;
+            text-align: center;
         }
 
         /* 2. Reduce Text Size */
@@ -102,7 +123,7 @@ st.markdown("""
         h2 { font-size: 1.4rem !important; }
         h3 { font-size: 1.1rem !important; }
         
-        /* 6. FORCE 2 CARDS PER ROW Logic */
+        /* 6. FORCE 2 CARDS PER ROW */
         div[data-testid="column"] {
             width: 50% !important;
             flex: 0 0 50% !important;
@@ -772,154 +793,6 @@ def manage_tab(tab_name, worksheet_name):
                 st.info("Packing Sheet is empty.")
 
         return # End Store Logic
-
-    # ===============================================================
-    # D. ECOMMERCE DASHBOARD LOGIC
-    # ===============================================================
-    if worksheet_name == "Ecommerce":
-        df_curr = pd.DataFrame()
-        c_head, c_ch, c_date, c_ref = st.columns([2, 1, 1, 0.5])
-        with c_head: st.subheader("📊 Performance Overview")
-        with c_ref:
-            st.write("")
-            st.write("")
-            if st.button("🔄", key="ref_eco"):
-                st.cache_data.clear()
-                st.rerun()
-        
-        unique_channels = ["All Channels"]
-        if "Channel Name" in data.columns:
-            channels_list = sorted(data["Channel Name"].astype(str).unique().tolist())
-            unique_channels.extend(channels_list)
-
-        with c_ch: selected_channel = st.selectbox("Select Channel", unique_channels, index=0)
-        with c_date: selected_period = st.selectbox("Compare Period", ["Today", "Yesterday", "Last 7 Days", "Last 15 Days", "Last 30 Days", "This Month", "All Time"], index=0)
-
-        if not data.empty:
-            df_calc = data.copy()
-            df_calc["dt"] = pd.to_datetime(df_calc["Date"], errors='coerce').dt.date
-            
-            if selected_channel != "All Channels": df_calc = df_calc[df_calc["Channel Name"] == selected_channel]
-
-            today = date.today()
-            if selected_period == "Today":
-                curr_start, curr_end = today, today
-                prev_start, prev_end = today - timedelta(days=1), today - timedelta(days=1)
-            elif selected_period == "Yesterday":
-                curr_start, curr_end = today - timedelta(days=1), today - timedelta(days=1)
-                prev_start, prev_end = today - timedelta(days=2), today - timedelta(days=2)
-            elif selected_period == "Last 7 Days":
-                curr_start, curr_end = today - timedelta(days=6), today
-                prev_start, prev_end = today - timedelta(days=13), today - timedelta(days=7)
-            elif selected_period == "Last 15 Days":
-                curr_start, curr_end = today - timedelta(days=14), today
-                prev_start, prev_end = today - timedelta(days=29), today - timedelta(days=15)
-            elif selected_period == "Last 30 Days":
-                curr_start, curr_end = today - timedelta(days=29), today
-                prev_start, prev_end = today - timedelta(days=59), today - timedelta(days=30)
-            elif selected_period == "This Month":
-                curr_start, curr_end = today.replace(day=1), today
-                prev_month_end = curr_start - timedelta(days=1)
-                prev_month_start = prev_month_end.replace(day=1)
-                prev_start, prev_end = prev_month_start, prev_month_start + (curr_end - curr_start)
-            else:
-                curr_start, curr_end = date.min, date.max
-                prev_start, prev_end = date.min, date.min
-
-            mask_curr = (df_calc["dt"] >= curr_start) & (df_calc["dt"] <= curr_end)
-            df_curr = df_calc[mask_curr]
-            mask_prev = (df_calc["dt"] >= prev_start) & (df_calc["dt"] <= prev_end)
-            df_prev = df_calc[mask_prev]
-
-            def sum_cols(df):
-                o = pd.to_numeric(df["Today's Order"], errors='coerce').sum()
-                d = pd.to_numeric(df["Today's Dispatch"], errors='coerce').sum()
-                r = pd.to_numeric(df["Return"], errors='coerce').sum()
-                return int(o), int(d), int(r)
-
-            c_ord, c_dis, c_ret = sum_cols(df_curr)
-            p_ord, p_dis, p_ret = sum_cols(df_prev)
-
-            k1, k2, k3 = st.columns(3)
-            def get_delta(curr, prev):
-                if selected_period == "All Time": return None
-                diff = curr - prev
-                if prev == 0: return f"{diff}"
-                pct = round((diff / prev) * 100, 1)
-                return f"{diff} ({pct}%)"
-
-            with k1: st.metric("Total Orders", c_ord, delta=get_delta(c_ord, p_ord))
-            with k2: st.metric("Total Dispatched", c_dis, delta=get_delta(c_dis, p_dis))
-            with k3: st.metric("Total Returns", c_ret, delta=get_delta(c_ret, p_ret), delta_color="inverse")
-
-        st.divider()
-
-        st.subheader("📈 Visual Trends")
-        if not data.empty:
-            df_viz = data.copy()
-            df_viz["Date"] = pd.to_datetime(df_viz["Date"], errors='coerce')
-            df_viz["Today's Order"] = pd.to_numeric(df_viz["Today's Order"], errors='coerce').fillna(0)
-            today = date.today()
-            default_start = today - timedelta(days=10)
-            c_range, _ = st.columns([1, 2])
-            with c_range: date_range = st.date_input("Chart Date Range", value=(default_start, today), key="viz_range")
-
-            if isinstance(date_range, tuple) and len(date_range) == 2:
-                start_d, end_d = date_range
-                mask_viz = (df_viz["Date"].dt.date >= start_d) & (df_viz["Date"].dt.date <= end_d)
-                df_viz_filtered = df_viz[mask_viz]
-                g_col, p_col = st.columns([2, 1])
-                with g_col:
-                    if not df_viz_filtered.empty:
-                        daily_trend = df_viz_filtered.groupby("Date")["Today's Order"].sum().reset_index()
-                        fig_line = px.line(daily_trend, x="Date", y="Today's Order", title="Order Trend", markers=True)
-                        fig_line.update_traces(line_color='#FF4B4B', line_width=3)
-                        st.plotly_chart(fig_line, use_container_width=True)
-                    else: st.info("No data for charts")
-                with p_col:
-                    if not df_viz_filtered.empty and "Channel Name" in df_viz_filtered.columns:
-                        channel_dist = df_viz_filtered.groupby("Channel Name")["Today's Order"].sum().reset_index()
-                        fig_pie = px.pie(channel_dist, values="Today's Order", names="Channel Name", title="Channel Share", hole=0.4)
-                        st.plotly_chart(fig_pie, use_container_width=True)
-
-        st.divider()
-
-        st.write("### 📋 Detailed Logs")
-        if df_curr.empty:
-            display_df = pd.DataFrame(columns=data.columns).drop(columns=["dt"], errors="ignore") if not data.empty else pd.DataFrame()
-        else:
-            display_df = df_curr.drop(columns=["dt"], errors="ignore")
-
-        is_editable = (st.session_state["role"] == "Ecommerce")
-        if is_editable:
-            edited_df = st.data_editor(display_df, use_container_width=True, num_rows="fixed", key="eco_editor", disabled=["_original_idx"])
-            clean_view = display_df.drop(columns=["_original_idx"], errors='ignore')
-            clean_edited = edited_df.drop(columns=["_original_idx"], errors='ignore')
-            if not clean_view.equals(clean_edited):
-                if st.button("💾 Save Table Changes"): save_smart_update(data, edited_df, worksheet_name)
-            
-            st.divider()
-            with st.expander("➕ Add New Ecommerce Entry"):
-                with st.form("eco_form"):
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        date_val = st.date_input("Date")
-                        channel = st.text_input("Channel Name")
-                        orders = st.number_input("Today's Order", min_value=0)
-                    with c2:
-                        dispatch = st.number_input("Today's Dispatch", min_value=0)
-                        ret = st.number_input("Return", min_value=0)
-                    if st.form_submit_button("Add Record"):
-                        if not channel: st.warning("Channel Name Required")
-                        else:
-                            new_row = pd.DataFrame([{"Date": str(date_val), "Channel Name": channel, "Today's Order": orders, "Today's Dispatch": dispatch, "Return": ret}])
-                            save_new_row(data, new_row, worksheet_name)
-                    
-                    inject_enter_key_navigation()
-        else:
-            st.info("ℹ️ Read-Only View (Admin Access)")
-            st.dataframe(display_df.drop(columns=["_original_idx"], errors='ignore'), use_container_width=True)
-        return
 
 # ------------------------------------------------------------------
 # 8. APP ORCHESTRATION
