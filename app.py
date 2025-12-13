@@ -5,7 +5,6 @@ import pandas as pd
 import plotly.express as px
 import time
 from datetime import date, timedelta, datetime
-import numpy as np
 
 # ------------------------------------------------------------------
 # 1. PAGE CONFIGURATION
@@ -126,13 +125,11 @@ except Exception as e:
     st.error(f"🚨 Connection Error: {e}")
     st.stop()
 
-# 👇 NEW SAFE INTEGER CONVERTER TO FIX CRASH
 def safe_int(val):
+    """Safely converts value to int, returning 0 if failed."""
     try:
         num = pd.to_numeric(val, errors='coerce')
-        if pd.notna(num):
-            return int(num)
-        return 0
+        return int(num) if pd.notna(num) else 0
     except:
         return 0
 
@@ -154,9 +151,6 @@ def filter_by_date(df, filter_option, date_col_name="Date"):
 
 def save_smart_update(original_data, edited_subset, sheet_name):
     try:
-        # If Production, map columns back for saving if needed
-        # But we will use consistent column names in the edited subset
-        
         all_cols = [c for c in original_data.columns if c != "_original_idx"]
         for i, row in edited_subset.iterrows():
             idx = row.get("_original_idx")
@@ -211,14 +205,12 @@ def render_task_cards(df_display, date_col, role_name, data, worksheet_name):
     for i, (index, row) in enumerate(df_display.iterrows()):
         col = cols[i % 4]
         with col:
-            # Handle Priority safely
             p_val = row.get('Priority') if worksheet_name == "Production" else row.get('Order Priority')
             prio = safe_int(p_val) or 999
             
             emoji_prio = "🔴" if prio == 1 else "🟡" if prio == 2 else "🟢"
             
             with st.container(border=True):
-                # Header
                 c_head, c_del = st.columns([4, 1])
                 with c_head: 
                     if worksheet_name == "Production":
@@ -234,7 +226,6 @@ def render_task_cards(df_display, date_col, role_name, data, worksheet_name):
                 st.caption(f"{row.get(date_col, '-')}")
                 st.write(f"**{row.get('Item Name', 'Item')}**")
                 
-                # Qty Handling
                 qty_key = "Quantity" if worksheet_name == "Production" else "Qty"
                 qty_val = safe_int(row.get(qty_key))
                 ready_val = safe_int(row.get('Ready Qty'))
@@ -243,7 +234,6 @@ def render_task_cards(df_display, date_col, role_name, data, worksheet_name):
                 with c1: st.write(f"**Target:** {qty_val}")
                 with c2: st.write(f"**Ready:** {ready_val}")
 
-                # Details (Only for Packing)
                 if worksheet_name == "Packing":
                     details = []
                     if row.get('Logo'): details.append(f"Logo: {row['Logo']}")
@@ -251,7 +241,6 @@ def render_task_cards(df_display, date_col, role_name, data, worksheet_name):
                     if row.get('Box'): details.append(f"Box: {row['Box']}")
                     if details: st.caption(" | ".join(details))
                 
-                # Remarks/Notes
                 rem_key = "Notes" if worksheet_name == "Production" else "Remarks"
                 if row.get(rem_key): st.info(f"{row[rem_key]}", icon="📝")
                 
@@ -265,7 +254,6 @@ def render_edit_form(edit_idx, data, worksheet_name, date_col):
         row_data = data.loc[edit_idx]
         st.markdown(f"### ✏️ Editing: {row_data.get('Item Name', 'Task')}")
         
-        # Mapping column names based on tab
         col_qty = "Quantity" if worksheet_name == "Production" else "Qty"
         col_prio = "Priority" if worksheet_name == "Production" else "Order Priority"
         col_rem = "Notes" if worksheet_name == "Production" else "Remarks"
@@ -274,16 +262,13 @@ def render_edit_form(edit_idx, data, worksheet_name, date_col):
             with st.form(f"admin_{worksheet_name}_edit"):
                 c1, c2, c3 = st.columns(3)
                 with c1: new_date = st.date_input("Date", pd.to_datetime(row_data.get(date_col, date.today())).date())
-                
                 with c2: new_item = st.text_input("Item Name", row_data.get('Item Name', ''))
-                
                 with c3: new_qty = st.number_input("Target Qty", value=safe_int(row_data.get(col_qty, 0)))
                 
                 c4, c5 = st.columns(2)
                 with c4: new_prio = st.number_input("Priority", value=safe_int(row_data.get(col_prio, 1)))
                 with c5: new_rem = st.text_input("Notes/Remarks", row_data.get(col_rem, ''))
 
-                # Extra fields for Packing
                 new_party, new_box, new_logo, new_bot = "", "", "", ""
                 if worksheet_name == "Packing":
                     new_party = st.text_input("Party Name", row_data.get('Party Name', ''))
@@ -315,7 +300,6 @@ def render_edit_form(edit_idx, data, worksheet_name, date_col):
                     updated_row["_original_idx"] = edit_idx
                     save_smart_update(data, updated_row, worksheet_name)
         else:
-            # User View (Production / Packing)
             with st.form(f"user_{worksheet_name}_update"):
                 c1, c2 = st.columns(2)
                 with c1: new_ready = st.number_input("Ready Qty", value=safe_int(row_data.get('Ready Qty', 0)))
@@ -336,14 +320,11 @@ def render_add_task_form(data, worksheet_name):
     st.divider()
     with st.expander(f"➕ Assign New {worksheet_name} Task", expanded=False):
         with st.form(f"new_{worksheet_name}_task"):
-            
-            # --- PRODUCTION FORM ---
             if worksheet_name == "Production":
                 c1, c2, c3 = st.columns(3)
                 with c1: n_date = st.date_input("Date")
                 with c2: n_item = st.text_input("Item Name")
                 with c3: n_qty = st.number_input("Quantity", min_value=1)
-                
                 c4, c5 = st.columns(2)
                 with c4: n_prio = st.number_input("Priority", min_value=1, value=1)
                 with c5: n_note = st.text_input("Notes")
@@ -352,17 +333,9 @@ def render_add_task_form(data, worksheet_name):
                     if not n_item: st.warning("Item Name Required")
                     else:
                         new_task = pd.DataFrame([{
-                            "Date": str(n_date),
-                            "Item Name": n_item,
-                            "Quantity": n_qty,
-                            "Priority": n_prio,
-                            "Ready Qty": 0,
-                            "Status": "Pending",
-                            "Notes": n_note
+                            "Date": str(n_date), "Item Name": n_item, "Quantity": n_qty, "Priority": n_prio, "Ready Qty": 0, "Status": "Pending", "Notes": n_note
                         }])
                         save_new_row(data, new_task, worksheet_name)
-
-            # --- PACKING FORM ---
             else:
                 c1, c2, c3 = st.columns(3)
                 with c1: 
@@ -382,18 +355,7 @@ def render_add_task_form(data, worksheet_name):
                     if not n_item: st.warning("Item Name Required")
                     else:
                         new_task = pd.DataFrame([{
-                            "Date": str(date.today()), 
-                            "Order Date": str(n_date),
-                            "Order Priority": n_prio,
-                            "Item Name": n_item,
-                            "Party Name": n_party,
-                            "Qty": n_qty,
-                            "Logo": n_logo,
-                            "Bottom Print": n_bot,
-                            "Box": n_box,
-                            "Remarks": n_rem,
-                            "Ready Qty": 0,
-                            "Status": "Pending"
+                            "Date": str(date.today()), "Order Date": str(n_date), "Order Priority": n_prio, "Item Name": n_item, "Party Name": n_party, "Qty": n_qty, "Logo": n_logo, "Bottom Print": n_bot, "Box": n_box, "Remarks": n_rem, "Ready Qty": 0, "Status": "Pending"
                         }])
                         save_new_row(data, new_task, worksheet_name)
         inject_enter_key_navigation()
@@ -421,6 +383,12 @@ def manage_tab(tab_name, worksheet_name):
             if st.button("🔄", key="ref_order"):
                 st.cache_data.clear()
                 st.rerun()
+
+        # 🚀 FIX: Ensure required columns exist to prevent KeyError
+        if "Item Name" not in data.columns: data["Item Name"] = ""
+        if "Party Name" not in data.columns: data["Party Name"] = ""
+        if "Qty" not in data.columns: data["Qty"] = 0
+        if "Transaction Type" not in data.columns: data["Transaction Type"] = "Order Received"
 
         tab_log, tab_summ = st.tabs(["📝 Order/Dispatch Logs (Entry)", "📊 Pending Orders Summary"])
         
@@ -487,22 +455,27 @@ def manage_tab(tab_name, worksheet_name):
                 st.cache_data.clear()
                 st.rerun()
         
-        # --- PREPARE DATA ---
+        # --- SAFE COLUMN CREATION TO PREVENT CRASH ---
+        if "Status" not in data.columns: data["Status"] = "Pending"
         data["Status"] = data["Status"].fillna("Pending").replace("", "Pending")
         
-        # Mapping for Production vs Packing
         if worksheet_name == "Production":
             date_col = "Date"
             prio_col = "Priority"
-            # Ensure columns exist
+            if "Date" not in data.columns: data["Date"] = str(date.today())
             if "Priority" not in data.columns: data["Priority"] = 999
             if "Quantity" not in data.columns: data["Quantity"] = 0
+            if "Item Name" not in data.columns: data["Item Name"] = ""
+            if "Ready Qty" not in data.columns: data["Ready Qty"] = 0
+            if "Notes" not in data.columns: data["Notes"] = ""
         else:
             date_col = "Order Date" if "Order Date" in data.columns else "Date"
             prio_col = "Order Priority"
             if "Order Priority" not in data.columns: data["Order Priority"] = 999
             if "Qty" not in data.columns: data["Qty"] = 0
             if "Party Name" not in data.columns: data["Party Name"] = ""
+            if "Item Name" not in data.columns: data["Item Name"] = ""
+            if "Ready Qty" not in data.columns: data["Ready Qty"] = 0
 
         # Safe date conversion
         data["_dt_obj"] = pd.to_datetime(data[date_col], errors='coerce').dt.date
@@ -510,10 +483,8 @@ def manage_tab(tab_name, worksheet_name):
         # Safe priority conversion
         data[prio_col] = pd.to_numeric(data[prio_col], errors='coerce').fillna(999)
 
-        # LOGIC: Today/Past vs Future
         all_pending = data[data["Status"] != "Complete"].copy()
         today = date.today()
-        # Sort by Priority then Date
         all_pending = all_pending.sort_values(by=[prio_col, "_dt_obj"], ascending=[True, True])
         
         df_today_backlog = all_pending[all_pending["_dt_obj"] <= today].copy()
@@ -530,14 +501,11 @@ def manage_tab(tab_name, worksheet_name):
             st.balloons()
             st.success("🎉 All tasks completed!")
 
-        # EDIT FORM
         if st.session_state["edit_idx"] is not None:
             render_edit_form(st.session_state["edit_idx"], data, worksheet_name, date_col)
-        # SHOW CARDS
         elif not df_display.empty:
             render_task_cards(df_display, date_col, st.session_state["role"], data, worksheet_name)
 
-        # ADD FORM (ADMIN)
         if st.session_state["role"] == "Admin" and st.session_state["edit_idx"] is None:
             render_add_task_form(data, worksheet_name)
 
@@ -558,12 +526,20 @@ def manage_tab(tab_name, worksheet_name):
                 st.cache_data.clear()
                 st.rerun()
 
+        # 🚀 FIX: Ensure Store columns exist
+        if "Item Name" not in data.columns: data["Item Name"] = ""
+        if "Qty" not in data.columns: data["Qty"] = 0
+        if "Recvd From" not in data.columns: data["Recvd From"] = ""
+        if "Type" not in data.columns: data["Type"] = ""
+        if "Transaction Type" not in data.columns: data["Transaction Type"] = ""
+        if "Invoice No." not in data.columns: data["Invoice No."] = ""
+
         tab_inv, tab_plan = st.tabs(["📊 Inventory Dashboard", "📅 Packing Planning"])
 
         with tab_inv:
-            items_list = sorted(data["Item Name"].astype(str).unique()) if "Item Name" in data.columns else []
-            vendor_list = sorted(data["Recvd From"].astype(str).unique()) if "Recvd From" in data.columns else []
-            type_list = sorted(data["Type"].astype(str).unique()) if "Type" in data.columns else []
+            items_list = sorted(data["Item Name"].astype(str).unique())
+            vendor_list = sorted(data["Recvd From"].astype(str).unique())
+            type_list = sorted(data["Type"].astype(str).unique())
 
             c1, c2 = st.columns([1, 3])
             with c1: d_filter = st.selectbox("📅 Date Filter", ["All", "Today", "Yesterday", "Prev 7 Days", "This Month"], key="st_date")
@@ -585,7 +561,7 @@ def manage_tab(tab_name, worksheet_name):
 
             st.divider()
 
-            if not filtered_df.empty and "Item Name" in filtered_df.columns and "Qty" in filtered_df.columns:
+            if not filtered_df.empty:
                 with st.expander("📊 Live Stock Analysis (Based on Current Search)", expanded=True):
                     df_calc = filtered_df.copy()
                     df_calc["Qty"] = pd.to_numeric(df_calc["Qty"], errors="coerce").fillna(0)
