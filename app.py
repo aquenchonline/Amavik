@@ -478,12 +478,7 @@ def manage_tab(tab_name, worksheet_name):
     # A. ORDER TAB
     # ===============================================================
     if worksheet_name == "Order":
-        c_title, c_ref = st.columns([8, 1])
-        with c_title: st.subheader("📑 Orders & Dispatch Management")
-        with c_ref:
-            if st.button("🔄", key="ref_order"):
-                st.cache_data.clear()
-                st.rerun()
+        st.subheader("📑 Orders & Dispatch Management")
 
         # 🚀 FIX: Ensure required columns exist
         if "Item Name" not in data.columns: data["Item Name"] = ""
@@ -581,12 +576,7 @@ def manage_tab(tab_name, worksheet_name):
     # B. PRODUCTION & PACKING
     # ===============================================================
     if worksheet_name in ["Packing", "Production"]:
-        c_title, c_ref = st.columns([8, 1])
-        with c_title: st.subheader(f"📦 {worksheet_name} Tasks")
-        with c_ref:
-            if st.button("🔄", key=f"ref_{worksheet_name}"):
-                st.cache_data.clear()
-                st.rerun()
+        st.subheader(f"📦 {worksheet_name} Tasks")
         
         if "Status" not in data.columns: data["Status"] = "Pending"
         data["Status"] = data["Status"].fillna("Pending").replace("", "Pending")
@@ -653,12 +643,7 @@ def manage_tab(tab_name, worksheet_name):
     # C. STORE TAB LOGIC
     # ===============================================================
     if worksheet_name == "Store":
-        c_title, c_ref = st.columns([8, 1])
-        with c_title: st.subheader("📦 Store Management")
-        with c_ref:
-            if st.button("🔄", key="ref_store"):
-                st.cache_data.clear()
-                st.rerun()
+        st.subheader("📦 Store Management")
 
         if "Item Name" not in data.columns: data["Item Name"] = ""
         if "Qty" not in data.columns: data["Qty"] = 0
@@ -954,13 +939,14 @@ else:
         if st.button("Logout", use_container_width=True): logout()
 
     # GLOBAL HEADER & REFRESH (Top Right)
-    col_header, col_btn = st.columns([6, 1])
-    with col_header:
+    c1, c2 = st.columns([1, 1]) # Tight layout
+    with c1:
         st.title("🏭 Amavik ERP")
-    with col_btn:
+    with c2:
+        # Align button to bottom of title
         st.write("") 
         st.write("") 
-        if st.button("🔄", key="global_refresh", help="Refresh Data"):
+        if st.button("🔄 Refresh Data", key="global_refresh"):
             st.cache_data.clear()
             st.rerun()
 
