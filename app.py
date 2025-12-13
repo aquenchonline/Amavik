@@ -16,7 +16,7 @@ st.set_page_config(
     page_title="Amavik ERP", 
     layout="wide", 
     page_icon="🏭",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed" # Collapsed by default for login view
 )
 
 # ------------------------------------------------------------------
@@ -36,6 +36,21 @@ st.markdown("""
     /* APP BACKGROUND */
     .stApp {
         background-color: #F4F7FE; /* GXON Light Dashboard BG */
+    }
+
+    /* ======================================= */
+    /* LOGIN PAGE SPECIFIC STYLES              */
+    /* ======================================= */
+    .login-header {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #111C43;
+        margin-bottom: 0.5rem;
+    }
+    .login-sub {
+        color: #7C8FAC;
+        font-size: 1rem;
+        margin-bottom: 2rem;
     }
 
     /* ======================================= */
@@ -117,7 +132,7 @@ st.markdown("""
     /* TABLES & SEARCH BAR                     */
     /* ======================================= */
     
-    /* Custom Search Bar */
+    /* Custom Search Bar & Inputs */
     .stTextInput input {
         border-radius: 50px !important;
         border: 1px solid #DFE5EF;
@@ -269,13 +284,24 @@ if st.session_state["logged_in"] and st.session_state["user"] in USERS:
     st.session_state["access"] = USERS[st.session_state["user"]]["access"]
 
 def login():
-    st.title("🔒 Amavik ERP")
-    st.markdown("### Sign In")
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col2:
-        username = st.text_input("User ID")
-        password = st.text_input("Password", type="password")
-        if st.button("Login", type="primary", use_container_width=True):
+    # Split Layout for Login (Image Left | Form Right)
+    c1, c2 = st.columns([1.5, 1])
+    
+    with c1:
+        # Placeholder for a professional ERP/Analytics image
+        st.image("https://img.freepik.com/free-vector/data-extraction-concept-illustration_114360-4876.jpg", use_container_width=True)
+    
+    with c2:
+        st.markdown("<div style='margin-top: 50px;'></div>", unsafe_allow_html=True)
+        st.markdown('<p class="login-header">Welcome to Amavik ERP</p>', unsafe_allow_html=True)
+        st.markdown('<p class="login-sub">Please sign-in to your account to continue</p>', unsafe_allow_html=True)
+        
+        username = st.text_input("User ID", placeholder="Enter your ID")
+        password = st.text_input("Password", type="password", placeholder="Enter your password")
+        
+        st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
+        
+        if st.button("Sign In", type="primary", use_container_width=True):
             if username in USERS and USERS[username]["pass"] == password:
                 st.session_state["logged_in"] = True
                 st.session_state["user"] = username
@@ -414,10 +440,10 @@ def color_status(val):
         return 'background-color: #EBF3FE; color: #5D87FF; font-weight: 600; padding: 4px 10px; border-radius: 20px;'
     return ''
 
-def render_styled_table(df, key_prefix, editable=False):
+def render_styled_table(df, key_prefix, editable=False, decimal_format=None):
     """
     Renders a dataframe with Pagination (10 rows/page) and Search.
-    No forced strict decimal formatting here, lets smart data take over.
+    decimal_format: String like "%.1f" to force decimals (used for Store)
     """
     if df.empty:
         st.info("No data available.")
@@ -466,6 +492,12 @@ def render_styled_table(df, key_prefix, editable=False):
     for dc in date_cols:
         st_config[dc] = st.column_config.DateColumn(dc, format="YYYY-MM-DD")
     
+    # Store Tab Decimal Logic (Force 1 decimal max)
+    if decimal_format:
+        num_cols = df_page.select_dtypes(include=['float', 'int']).columns
+        for nc in num_cols:
+             st_config[nc] = st.column_config.NumberColumn(nc, format=decimal_format)
+
     # --- 4. RENDER TABLE ---
     result = None
     if not editable:
@@ -658,17 +690,19 @@ def render_add_task_form(data, worksheet_name):
                         save_new_row(data, new_task, worksheet_name)
             else:
                 c1, c2, c3 = st.columns(3)
-                with c1: n_date = st.date_input("Order Date")
-                with c2: n_party = st.text_input("Party Name")
-                with c3: n_logo = st.selectbox("Logo", ["W/O Logo", "Laser", "Pad"])
-                c4, c5 = st.columns(2)
-                with c4: n_item = st.text_input("Item Name")
-                with c5: n_qty = st.number_input("Order Qty", min_value=1.0, step=0.01)
-                c6, c7 = st.columns(2)
-                with c6: n_bot = st.selectbox("Bottom Print", ["No", "Laser", "Pad"])
-                with c7: n_prio = st.number_input("Priority", min_value=1, value=1)
-                n_box = st.selectbox("Box", ["Loose", "Brown Box", "White Box", "Box"])
-                n_rem = st.text_input("Remarks")
+                with c1: 
+                    n_date = st.date_input("Order Date")
+                    n_party = st.text_input("Party Name")
+                    n_logo = st.selectbox("Logo", ["W/O Logo", "Laser", "Pad"])
+                with c2:
+                    n_item = st.text_input("Item Name")
+                    n_qty = st.number_input("Order Qty", min_value=1.0, step=0.01)
+                    n_bot = st.selectbox("Bottom Print", ["No", "Laser", "Pad"])
+                with c3:
+                    n_prio = st.number_input("Priority", min_value=1, value=1)
+                    n_box = st.selectbox("Box", ["Loose", "Brown Box", "White Box", "Box"])
+                    n_rem = st.text_input("Remarks")
+                
                 if st.form_submit_button("🚀 Assign"):
                     if not n_item: st.warning("Item Name Required")
                     else:
@@ -900,8 +934,7 @@ def manage_tab(tab_name, worksheet_name):
                     })).reset_index()
                     
                     stock_summary["Balance"] = stock_summary["Inward"] - stock_summary["Outward"]
-                    stock_summary = stock_summary.round(1) # Round for summary
-                    render_styled_table(stock_summary, "stock", decimal_format="%.1f")
+                    render_styled_table(stock_summary.round(1), "stock", decimal_format="%.1f")
 
             if st.session_state["role"] == "Store":
                 st.write("### 📋 Transaction Log")
