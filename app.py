@@ -77,12 +77,12 @@ st.markdown("""
     /* 🚀 FORCE WHITE CARDS - THE FIX IS HERE                      */
     /* ============================================================ */
     
-    /* Target any container with border=True */
+    /* 1. Target st.container(border=True) used in Packing/Production/Charts/Logs */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background-color: #ffffff !important;  /* Force Pure White */
         border: 1px solid #e2e8f0 !important;
         border-radius: 10px !important;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important;
+        box-shadow: 0 2px 4px 0 rgba(0,0,0,0.05) !important;
         padding: 16px !important;
         margin-bottom: 1rem;
     }
@@ -91,13 +91,21 @@ st.markdown("""
     div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stVerticalBlockBorderWrapper"] {
         box-shadow: none !important;
         border: 1px solid #f1f5f9 !important;
-        background-color: #f8fafc !important; /* Slightly gray for nested items */
+        background-color: #f8fafc !important; 
+    }
+
+    /* 2. Target st.metric used in Ecommerce KPIs to make them White Cards */
+    div[data-testid="stMetric"] {
+        background-color: #ffffff !important; /* Force Pure White */
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 10px !important;
+        box-shadow: 0 2px 4px 0 rgba(0,0,0,0.05) !important;
+        padding: 16px !important;
     }
 
     /* Force text color inside cards to be dark (readable on white) */
-    div[data-testid="stVerticalBlockBorderWrapper"] p,
-    div[data-testid="stVerticalBlockBorderWrapper"] span,
-    div[data-testid="stVerticalBlockBorderWrapper"] div {
+    div[data-testid="stVerticalBlockBorderWrapper"] *,
+    div[data-testid="stMetric"] * {
         color: #1e293b; /* Dark Slate */
     }
 
@@ -923,6 +931,7 @@ def manage_tab(tab_name, worksheet_name):
             c_ord, c_dis, c_ret = sum_cols(df_curr)
             p_ord, p_dis, p_ret = sum_cols(df_prev)
 
+            # WRAP KPIS IN WHITE CARDS
             k1, k2, k3 = st.columns(3)
             def get_delta(curr, prev):
                 if selected_period == "All Time": return None
@@ -932,17 +941,15 @@ def manage_tab(tab_name, worksheet_name):
                 return f"{diff} ({pct}%)"
 
             with k1:
-                with st.container(border=True):
-                    st.metric("Total Orders", c_ord, delta=get_delta(c_ord, p_ord))
+                st.metric("Total Orders", c_ord, delta=get_delta(c_ord, p_ord))
             with k2:
-                with st.container(border=True):
-                    st.metric("Total Dispatched", c_dis, delta=get_delta(c_dis, p_dis))
+                st.metric("Total Dispatched", c_dis, delta=get_delta(c_dis, p_dis))
             with k3:
-                with st.container(border=True):
-                    st.metric("Total Returns", c_ret, delta=get_delta(c_ret, p_ret), delta_color="inverse")
+                st.metric("Total Returns", c_ret, delta=get_delta(c_ret, p_ret), delta_color="inverse")
 
         st.divider()
 
+        # CHART SECTION (WHITE CARD)
         with st.container(border=True):
             st.markdown("### 📈 Visual Trends")
             if not data.empty:
@@ -974,6 +981,7 @@ def manage_tab(tab_name, worksheet_name):
 
         st.divider()
 
+        # LOGS SECTION (WHITE CARD)
         with st.container(border=True):
             st.write("### 📋 Detailed Logs")
             if df_curr.empty:
