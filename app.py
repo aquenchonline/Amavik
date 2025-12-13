@@ -79,21 +79,20 @@ st.markdown("""
             overflow-x: auto !important;    /* Allow horizontal scroll */
             white-space: nowrap !important;
             gap: 5px !important;
-            padding-bottom: 5px; /* Space for scroll */
+            padding-bottom: 5px; 
             
             /* Hide Scrollbar but keep functionality */
-            scrollbar-width: none; /* Firefox */
-            -ms-overflow-style: none; /* IE */
+            scrollbar-width: none; 
+            -ms-overflow-style: none; 
         }
         
-        /* Hide scrollbar for Chrome/Safari */
         .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar { 
             display: none; 
         }
 
         .stTabs [data-baseweb="tab"] {
-            flex: 0 0 auto !important;      /* Prevent shrinking/growing */
-            width: 23% !important;          /* Force 4 tabs in view (4x23 = 92%) */
+            flex: 0 0 auto !important;      
+            width: 31% !important;          /* 👈 CHANGED: 3 tabs visible (3x31% ~ 93%) */
             font-size: 0.7rem !important;
             padding: 4px 2px !important;
             height: 35px !important;
