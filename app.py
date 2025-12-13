@@ -53,12 +53,16 @@ USERS = {
 }
 
 # ------------------------------------------------------------------
-# 4. SESSION STATE (LOGIN SYSTEM)
+# 4. SESSION STATE (LOGIN & UI)
 # ------------------------------------------------------------------
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
     st.session_state["user"] = None
     st.session_state["role"] = None
+
+# State to track which Packing Card is being edited
+if "packing_edit_idx" not in st.session_state:
+    st.session_state["packing_edit_idx"] = None
 
 def login():
     st.title("🔒 ERP Secure Login")
@@ -80,6 +84,7 @@ def login():
 def logout():
     st.session_state["logged_in"] = False
     st.session_state["user"] = None
+    st.session_state["packing_edit_idx"] = None
     st.rerun()
 
 # ------------------------------------------------------------------
@@ -127,6 +132,7 @@ def save_smart_update(original_data, edited_subset, sheet_name):
         final = original_data.drop(columns=["_original_idx"], errors='ignore')
         conn.update(spreadsheet=SHEET_URL, worksheet=sheet_name, data=final)
         st.toast("✅ Saved Successfully!", icon="💾")
+        st.session_state["packing_edit_idx"] = None # Clear editing state
         st.cache_data.clear()
         time.sleep(1)
         st.rerun()
@@ -159,7 +165,99 @@ def manage_tab(tab_name, worksheet_name):
         data['_original_idx'] = data.index
 
     # ===============================================================
-    # A. STORE TAB LOGIC
+    # A. PACKING TAB (CARD VIEW FOR TASKS)
+    # ===============================================================
+    if worksheet_name == "Packing":
+        st.subheader("📦 Packing Department Tasks")
+        
+        # Ensure Columns
+        if "Party Name" not in data.columns: data["Party Name"] = ""
+        data["Status"] = data["Status"].fillna("Pending").replace("", "Pending")
+        
+        # 1. Filter for Pending/Next Day tasks (Visual Cards)
+        # Only show cards if status is NOT complete
+        mask_pending = data["Status"] != "Complete"
+        df_pending = data[mask_pending].copy()
+        
+        # If user selected a card to edit, show the FORM
+        if st.session_state["packing_edit_idx"] is not None:
+            edit_idx = st.session_state["packing_edit_idx"]
+            
+            # Get the specific row data
+            row_data = data.loc[edit_idx]
+            
+            st.info(f"📝 **Updating Task:** {row_data['Item Name']}")
+            
+            with st.form("packing_update_form"):
+                c1, c2 = st.columns(2)
+                with c1:
+                    new_ready = st.number_input("Ready Qty", value=int(pd.to_numeric(row_data.get("Ready Qty", 0), errors='coerce')))
+                with c2:
+                    new_status = st.selectbox("Status", ["Pending", "Next Day", "Complete"], index=["Pending", "Next Day", "Complete"].index(row_data.get("Status", "Pending")))
+                
+                cols = st.columns(2)
+                if cols[0].form_submit_button("✅ Save Update", type="primary"):
+                    # Create a mini dataframe with just this row updated
+                    updated_row_df = pd.DataFrame([row_data]) # Copy old data
+                    updated_row_df.at[edit_idx, "Ready Qty"] = new_ready
+                    updated_row_df.at[edit_idx, "Status"] = new_status
+                    updated_row_df["_original_idx"] = edit_idx # Important for smart save
+                    
+                    save_smart_update(data, updated_row_df, worksheet_name)
+                
+                if cols[1].form_submit_button("❌ Cancel"):
+                    st.session_state["packing_edit_idx"] = None
+                    st.rerun()
+
+        # If NO card is selected, Show the Grid of Cards
+        else:
+            st.write(f"### 📅 Today's Assigned Tasks ({len(df_pending)})")
+            
+            if df_pending.empty:
+                st.success("🎉 No pending tasks! All caught up.")
+            else:
+                # Use columns to create a grid layout
+                cols = st.columns(3) # 3 Cards per row
+                
+                for i, (index, row) in enumerate(df_pending.iterrows()):
+                    col = cols[i % 3]
+                    
+                    with col:
+                        # CARD DESIGN
+                        with st.container(border=True):
+                            # Header: Party Name
+                            st.markdown(f"### {row['Party Name']}")
+                            st.markdown("---")
+                            
+                            # Body: Item & Qty
+                            st.markdown(f"**Item:** {row['Item Name']}")
+                            st.markdown(f"**Qty:** {row['Qty']}")
+                            
+                            # Details (Logo, Print, Box)
+                            st.caption(f"🎨 Logo: {row.get('Logo', '-')}")
+                            st.caption(f"🖨️ Bottom: {row.get('Bottom Print', '-')}")
+                            st.caption(f"📦 Box: {row.get('Box', '-')}")
+                            
+                            # Remarks (Highlight)
+                            if row.get('Remarks'):
+                                st.info(f"📝 {row['Remarks']}")
+                            
+                            # Action Button
+                            if st.button("Update Status", key=f"btn_pack_{index}", use_container_width=True):
+                                st.session_state["packing_edit_idx"] = index
+                                st.rerun()
+
+            st.divider()
+            
+            # Completed History (Collapsible)
+            with st.expander("✅ View Completed History"):
+                mask_complete = data["Status"] == "Complete"
+                st.dataframe(data[mask_complete].drop(columns=["_original_idx"], errors="ignore"), use_container_width=True)
+
+        return # End Packing Logic
+
+    # ===============================================================
+    # B. STORE TAB LOGIC (INVENTORY SYSTEM)
     # ===============================================================
     if worksheet_name == "Store":
         # Header & Refresh
@@ -190,12 +288,11 @@ def manage_tab(tab_name, worksheet_name):
                 )
 
             # APPLY FILTERS
-            # A. Apply Date Filter First
+            # A. Apply Date Filter
             filtered_df = filter_by_date(data, d_filter, date_col_name="Date Of Entry")
             
             # B. Apply Text Search (If > 3 chars)
             if search_query and len(search_query) >= 3:
-                # Convert everything to string for searching
                 mask = (
                     filtered_df['Item Name'].astype(str).str.contains(search_query, case=False, na=False) |
                     filtered_df['Recvd From'].astype(str).str.contains(search_query, case=False, na=False) |
@@ -205,16 +302,19 @@ def manage_tab(tab_name, worksheet_name):
                 )
                 filtered_df = filtered_df[mask]
                 
-                # Show Suggestions (Unique Item Names found in the filtered result)
+                # --- 5 SUGGESTIONS LOGIC ---
                 found_items = filtered_df['Item Name'].unique().tolist()
-                if found_items:
-                    st.caption(f"💡 **Found Items:** {', '.join(found_items[:5])} {'...' if len(found_items)>5 else ''}")
+                # Limit to top 5
+                suggestions = found_items[:5]
+                
+                if suggestions:
+                    st.success(f"💡 **Top Suggestions:** {', '.join(suggestions)}")
                 else:
-                    st.caption("No matching items found.")
+                    st.warning("No matching items found.")
 
             st.divider()
 
-            # 2. LIVE STOCK (VISIBLE TO ALL)
+            # 2. LIVE STOCK
             if not filtered_df.empty and "Item Name" in filtered_df.columns and "Qty" in filtered_df.columns:
                 with st.expander("📊 Live Stock Analysis (Based on Current Search)", expanded=True):
                     df_calc = filtered_df.copy()
@@ -250,7 +350,6 @@ def manage_tab(tab_name, worksheet_name):
                         )
 
             # 3. TRANSACTION LOG (HIDDEN FROM ADMIN)
-            # Only users with role "Store" can see the logs and add entries
             if st.session_state["role"] == "Store":
                 st.write("### 📋 Transaction Log")
                 
@@ -318,18 +417,15 @@ def manage_tab(tab_name, worksheet_name):
                     inject_enter_key_navigation()
             
             else:
-                # ADMIN MESSAGE
                 st.divider()
                 st.info("🚫 **Restricted Area:** Detailed Transaction Logs and Data Entry are only visible to the Store Incharge.")
         
         # --- TAB 2: PACKING PLANNING ---
         with tab_plan:
             st.info("ℹ️ Showing Packing Orders for: **Last 7 Days & Next 5 Days**")
-            
             try:
                 packing_data = conn.read(spreadsheet=SHEET_URL, worksheet="Packing", ttl=0)
-                if packing_data is None or packing_data.empty:
-                    packing_data = pd.DataFrame()
+                if packing_data is None or packing_data.empty: packing_data = pd.DataFrame()
             except:
                 packing_data = pd.DataFrame()
 
@@ -339,7 +435,6 @@ def manage_tab(tab_name, worksheet_name):
                 today = date.today()
                 start_date = today - timedelta(days=7)
                 end_date = today + timedelta(days=5)
-                
                 mask_plan = (packing_data["dt_obj"] >= start_date) & (packing_data["dt_obj"] <= end_date)
                 plan_df = packing_data[mask_plan].copy()
                 
@@ -354,14 +449,7 @@ def manage_tab(tab_name, worksheet_name):
                     final_plan_view["Inner Qty Required"] = "Calculate"
                     final_plan_view["Outer Box Required"] = "Calculate"
                     
-                    st.dataframe(
-                        final_plan_view,
-                        use_container_width=True,
-                        column_config={
-                            d_col: st.column_config.DateColumn("Order Date"),
-                            "Qty": st.column_config.NumberColumn("Order Qty"),
-                        }
-                    )
+                    st.dataframe(final_plan_view, use_container_width=True, column_config={d_col: st.column_config.DateColumn("Order Date"), "Qty": st.column_config.NumberColumn("Order Qty")})
                 else:
                     st.info("No packing orders found in the selected date range.")
             else:
@@ -370,7 +458,7 @@ def manage_tab(tab_name, worksheet_name):
         return # End Store Logic
 
     # ===============================================================
-    # B. ECOMMERCE DASHBOARD LOGIC
+    # C. ECOMMERCE DASHBOARD LOGIC
     # ===============================================================
     if worksheet_name == "Ecommerce":
         df_curr = pd.DataFrame()
@@ -518,7 +606,7 @@ def manage_tab(tab_name, worksheet_name):
         return
 
     # ===============================================================
-    # C. STANDARD LOGIC (Production, Packing)
+    # D. STANDARD LOGIC (Production) - FALLBACK
     # ===============================================================
     
     # Header & Refresh
@@ -532,27 +620,15 @@ def manage_tab(tab_name, worksheet_name):
     if "Ready Qty" not in data.columns: data["Ready Qty"] = 0
     if "Status" not in data.columns: data["Status"] = "Pending"
     
-    if worksheet_name == "Packing":
-        if "Party Name" not in data.columns: data["Party Name"] = ""
-        desired_order = ["Date", "Order Date", "Order Priority", "Item Name", "Party Name", "Qty", "Logo", "Bottom Print", "Box", "Remarks", "Ready Qty", "Status"]
-        current_cols = data.columns.tolist()
-        final_order = [c for c in desired_order if c in current_cols] + [c for c in current_cols if c not in desired_order]
-        data = data[final_order]
-
-    data["Status"] = data["Status"].fillna("Pending").replace("", "Pending")
-
-    # Filters
+    # Standard Filters
     unique_items = sorted(data["Item Name"].astype(str).unique().tolist()) if "Item Name" in data.columns else []
-    unique_parties = sorted(data["Party Name"].astype(str).unique().tolist()) if "Party Name" in data.columns else []
-
-    c1, c2, c3 = st.columns(3)
+    
+    c1, c2 = st.columns([1, 2])
     with c1: date_filter = st.selectbox("📅 Date Range", ["All", "Today", "Yesterday", "Prev 7 Days", "Prev 15 Days", "Prev 30 Days", "Prev All"], index=0, key=f"d_{worksheet_name}")
     with c2: item_filter = st.multiselect("📦 Item Name", options=unique_items, key=f"i_{worksheet_name}")
-    with c3: party_filter = st.multiselect("busts_in_silhouette: Party Name", options=unique_parties, key=f"p_{worksheet_name}") if unique_parties else []
 
     filtered_data = filter_by_date(data, date_filter)
     if item_filter: filtered_data = filtered_data[filtered_data["Item Name"].isin(item_filter)]
-    if party_filter and "Party Name" in filtered_data.columns: filtered_data = filtered_data[filtered_data["Party Name"].isin(party_filter)]
 
     if not filtered_data.empty:
         active_mask = filtered_data["Status"] != "Complete"
@@ -561,6 +637,7 @@ def manage_tab(tab_name, worksheet_name):
     else:
         df_active, df_comp = pd.DataFrame(), pd.DataFrame()
 
+    # Permissions
     all_columns = [c for c in data.columns if c != "_original_idx"]
     if st.session_state["role"] == "Admin": disabled_cols = ["_original_idx"]
     else: disabled_cols = [c for c in all_columns if c not in ["Ready Qty", "Status"]] + ["_original_idx"]
@@ -592,48 +669,22 @@ def manage_tab(tab_name, worksheet_name):
         st.divider()
         with st.expander(f"➕ Add New Entry"):
             with st.form(f"fm_{worksheet_name}"):
-                if worksheet_name == "Packing":
-                    c1, c2, c3 = st.columns(3)
-                    with c1:
-                        d = st.date_input("Date")
-                        i = st.text_input("Item")
-                        p = st.text_input("Party")
-                    with c2:
-                        od = st.date_input("Order Date")
-                        q = st.number_input("Qty", min_value=0)
-                        l = st.selectbox("Logo", ["W/O Logo", "Laser", "Pad"])
-                    with c3:
-                        pr = st.number_input("Priority", min_value=1)
-                        b = st.selectbox("Bottom", ["No", "Laser", "Pad"])
-                        bx = st.selectbox("Box", ["Loose", "Brown Box", "White Box", "Box"])
-                    rem = st.text_input("Remarks")
-                    c4, c5 = st.columns(2)
-                    with c4: rq = st.number_input("Ready Qty", value=0)
-                    with c5: stt = st.selectbox("Status", ["Pending", "Next Day", "Complete"])
-                    
-                    if st.form_submit_button("Submit"):
-                        if not i: st.warning("Item Required")
-                        else:
-                            nr = pd.DataFrame([{"Date": str(d), "Order Date": str(od), "Order Priority": pr, "Item Name": i, "Party Name": p, "Qty": q, "Logo": l, "Bottom Print": b, "Box": bx, "Remarks": rem, "Ready Qty": rq, "Status": stt}])
-                            save_new_row(data, nr, worksheet_name)
-                
-                else: 
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        d = st.date_input("Date")
-                        i = st.text_input("Item")
-                    with c2:
-                        q = st.number_input("Qty", min_value=0)
-                        n = st.text_input("Notes")
-                    c3, c4 = st.columns(2)
-                    with c3: rq = st.number_input("Ready Qty", value=0)
-                    with c4: stt = st.selectbox("Status", ["Pending", "Next Day", "Complete"])
+                c1, c2 = st.columns(2)
+                with c1:
+                    d = st.date_input("Date")
+                    i = st.text_input("Item")
+                with c2:
+                    q = st.number_input("Qty", min_value=0)
+                    n = st.text_input("Notes")
+                c3, c4 = st.columns(2)
+                with c3: rq = st.number_input("Ready Qty", value=0)
+                with c4: stt = st.selectbox("Status", ["Pending", "Next Day", "Complete"])
 
-                    if st.form_submit_button("Submit"):
-                        if not i: st.warning("Item Required")
-                        else:
-                            nr = pd.DataFrame([{"Date": str(d), "Item": i, "Quantity": q, "Notes": n, "Ready Qty": rq, "Status": stt}])
-                            save_new_row(data, nr, worksheet_name)
+                if st.form_submit_button("Submit"):
+                    if not i: st.warning("Item Required")
+                    else:
+                        nr = pd.DataFrame([{"Date": str(d), "Item": i, "Quantity": q, "Notes": n, "Ready Qty": rq, "Status": stt}])
+                        save_new_row(data, nr, worksheet_name)
                 
                 inject_enter_key_navigation()
 
