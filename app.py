@@ -16,23 +16,54 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS
+# Custom CSS for Sticky Header, Beautiful Tabs, and Responsive Mobile
 st.markdown("""
 <style>
+    /* --------------------------------------- */
+    /* STICKY HEADER IMPLEMENTATION            */
+    /* --------------------------------------- */
+    
+    /* 1. Stick the Title & Refresh Button Area */
+    div[data-testid="stVerticalBlock"] > div:has(h1) {
+        position: sticky;
+        top: 0;
+        z-index: 999;
+        background-color: white;
+        padding-top: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    /* 2. Stick the Tabs right below the Title */
+    .stTabs {
+        position: sticky;
+        top: 80px; /* Adjust based on title height */
+        z-index: 998;
+        background-color: white;
+        padding-top: 10px;
+    }
+
+    /* --------------------------------------- */
+    /* GLOBAL STYLES                           */
+    /* --------------------------------------- */
+    
     div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column;"] > div[data-testid="stVerticalBlock"] {
         gap: 0.5rem;
     }
+    
     .stButton button {
         height: 2.2em;
         border-radius: 5px;
         transition: all 0.2s;
     }
-    /* Tab Styling */
+
+    /* Tab Styling (Desktop) */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background-color: transparent;
         padding-bottom: 10px;
     }
+
     .stTabs [data-baseweb="tab"] {
         height: 40px;
         white-space: pre-wrap;
@@ -45,6 +76,7 @@ st.markdown("""
         box-shadow: 0 1px 2px rgba(0,0,0,0.05);
         font-size: 1rem; 
     }
+
     .stTabs [aria-selected="true"] {
         background-color: #FF4B4B;
         color: white !important;
@@ -52,50 +84,65 @@ st.markdown("""
         font-weight: 600;
         box-shadow: 0 2px 5px rgba(255, 75, 75, 0.3);
     }
+
     .stTabs [data-baseweb="tab"]:hover {
         background-color: #fff;
         border-color: #FF4B4B;
         color: #FF4B4B;
     }
 
-    /* MOBILE RESPONSIVE STYLES */
+    /* --------------------------------------- */
+    /* MOBILE RESPONSIVE STYLES (Max Width 768px) */
+    /* --------------------------------------- */
     @media (max-width: 768px) {
+        
+        /* Adjust sticky top for mobile */
+        .stTabs { top: 70px; }
+
+        /* Sliding Tabs */
         .stTabs [data-baseweb="tab-list"] {
             display: flex !important;
-            flex-wrap: nowrap !important;
-            overflow-x: auto !important;
+            flex-wrap: nowrap !important;   
+            overflow-x: auto !important;    
             white-space: nowrap !important;
             gap: 5px !important;
             padding-bottom: 5px; 
             scrollbar-width: none; 
             -ms-overflow-style: none; 
         }
+        
         .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar { 
             display: none; 
         }
+
         .stTabs [data-baseweb="tab"] {
             flex: 0 0 auto !important;      
-            width: 31% !important; 
+            width: 31% !important;          
             font-size: 0.7rem !important;
             padding: 4px 2px !important;
             height: 35px !important;
             min-width: auto !important;
             text-align: center;
         }
+
         p, .stMarkdown, div[data-testid="stMarkdownContainer"] p {
             font-size: 0.85rem !important;
         }
+        
         div[data-testid="stMetricValue"] {
             font-size: 1.2rem !important;
         }
+        
         .stButton button {
             font-size: 0.8rem;
             padding-left: 0.3rem;
             padding-right: 0.3rem;
         }
+        
         h1 { font-size: 1.6rem !important; }
         h2 { font-size: 1.4rem !important; }
         h3 { font-size: 1.1rem !important; }
+        
         div[data-testid="column"] {
             width: 50% !important;
             flex: 0 0 50% !important;
@@ -438,7 +485,7 @@ def render_add_task_form(data, worksheet_name):
 # 7. MAIN LOGIC: MANAGE TAB
 # ------------------------------------------------------------------
 def manage_tab(tab_name, worksheet_name):
-    # 🛑 INITIALIZE DATAFRAMES FIRST TO PREVENT UnboundLocalError
+    # 🛑 INITIALIZE DATAFRAMES FIRST
     df_curr = pd.DataFrame()
     df_display = pd.DataFrame()
 
@@ -489,7 +536,7 @@ def manage_tab(tab_name, worksheet_name):
             if not data.empty:
                 # Use float for decimals
                 if "Qty" in data.columns: 
-                    data["Qty"] = pd.to_numeric(data["Qty"], errors='coerce').fillna(0)
+                    data["Qty"] = pd.to_numeric(data["Qty"], errors='coerce').fillna(0).astype(int)
                 if "Date" in data.columns: data["Date"] = pd.to_datetime(data["Date"], errors='coerce')
                 
                 # Show rounded in editor
@@ -753,9 +800,9 @@ def manage_tab(tab_name, worksheet_name):
                     final_plan_view["Outer Box Required"] = "Calculate"
                     # Round qty in plan view
                     if "Qty" in final_plan_view.columns:
-                        final_plan_view["Qty"] = pd.to_numeric(final_plan_view["Qty"], errors='coerce').fillna(0)
+                        final_plan_view["Qty"] = pd.to_numeric(final_plan_view["Qty"], errors='coerce').fillna(0).astype(int)
                     
-                    st.dataframe(final_plan_view, use_container_width=True, column_config={d_col: st.column_config.DateColumn("Order Date"), "Qty": st.column_config.NumberColumn("Order Qty")})
+                    st.dataframe(final_plan_view, use_container_width=True, column_config={d_col: st.column_config.DateColumn("Order Date"), "Qty": st.column_config.NumberColumn("Order Qty", format="%d")})
                 else:
                     st.info("No packing orders found in the selected date range.")
             else:
@@ -858,14 +905,25 @@ def manage_tab(tab_name, worksheet_name):
                 start_d, end_d = date_range
                 mask_viz = (df_viz["Date"].dt.date >= start_d) & (df_viz["Date"].dt.date <= end_d)
                 df_viz_filtered = df_viz[mask_viz]
+                
+                # REVISED CHANNEL-WISE GRAPH LOGIC
                 g_col, p_col = st.columns([2, 1])
                 with g_col:
                     if not df_viz_filtered.empty:
-                        daily_trend = df_viz_filtered.groupby("Date")["Today's Order"].sum().reset_index()
-                        fig_line = px.line(daily_trend, x="Date", y="Today's Order", title="Order Trend", markers=True)
-                        fig_line.update_traces(line_color='#FF4B4B', line_width=3)
+                        # Group by Date AND Channel to get multi-line chart
+                        daily_trend = df_viz_filtered.groupby(["Date", "Channel Name"])["Today's Order"].sum().reset_index()
+                        
+                        fig_line = px.line(
+                            daily_trend, 
+                            x="Date", 
+                            y="Today's Order", 
+                            color="Channel Name", 
+                            title="Channel-wise Sales Trend",
+                            markers=True
+                        )
                         st.plotly_chart(fig_line, use_container_width=True)
                     else: st.info("No data for charts")
+                
                 with p_col:
                     if not df_viz_filtered.empty and "Channel Name" in df_viz_filtered.columns:
                         channel_dist = df_viz_filtered.groupby("Channel Name")["Today's Order"].sum().reset_index()
@@ -904,16 +962,16 @@ def manage_tab(tab_name, worksheet_name):
                     c1, c2 = st.columns(2)
                     with c1:
                         date_val = st.date_input("Date")
-                        channel = st.text_input("Channel Name")
+                        # UPDATED DROPDOWN
+                        channel = st.selectbox("Channel Name", ["Amazon", "Flipkart", "Meesho", "Ajio", "JioMart", "Myntra", "Aquench.in"])
                         orders = st.number_input("Today's Order", min_value=0)
                     with c2:
                         dispatch = st.number_input("Today's Dispatch", min_value=0)
                         ret = st.number_input("Return", min_value=0)
                     if st.form_submit_button("Add Record"):
-                        if not channel: st.warning("Channel Name Required")
-                        else:
-                            new_row = pd.DataFrame([{"Date": str(date_val), "Channel Name": channel, "Today's Order": orders, "Today's Dispatch": dispatch, "Return": ret}])
-                            save_new_row(data, new_row, worksheet_name)
+                         # No empty check needed for dropdown as it always has value
+                        new_row = pd.DataFrame([{"Date": str(date_val), "Channel Name": channel, "Today's Order": orders, "Today's Dispatch": dispatch, "Return": ret}])
+                        save_new_row(data, new_row, worksheet_name)
                     
                     inject_enter_key_navigation()
         else:
