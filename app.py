@@ -1,6 +1,6 @@
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
-import streamlit.components.v1 as components # 👈 IMPORT ADDED
+import streamlit.components.v1 as components
 import pandas as pd
 import plotly.express as px
 import time
@@ -22,7 +22,6 @@ SHEET_URL = "https://docs.google.com/spreadsheets/d/1S6xS6hcdKSPtzKxCL005GwvNWQN
 # 2. JAVASCRIPT HELPER (ENTER KEY NAVIGATION)
 # ------------------------------------------------------------------
 def inject_enter_key_navigation():
-    # JavaScript to prevent Form Submission on Enter and move focus instead
     js = """
     <script>
         var doc = window.parent.document;
@@ -34,7 +33,6 @@ def inject_enter_key_navigation():
                     var next = inputs[index + 1];
                     if (next) {
                         next.focus();
-                        // next.select(); // Optional: select text
                     }
                 }
             });
@@ -173,11 +171,11 @@ def manage_tab(tab_name, worksheet_name):
                 st.rerun()
 
         # Two Sub-Tabs
-        tab_inv, tab_plan = st.tabs(["📊 Inventory & Transactions", "📅 Packing Planning (Upcoming)"])
+        tab_inv, tab_plan = st.tabs(["📊 Inventory Dashboard", "📅 Packing Planning"])
 
         # --- TAB 1: INVENTORY ---
         with tab_inv:
-            # FILTERS (Moved Filters here)
+            # 1. FILTERS (VISIBLE TO ALL)
             items_list = sorted(data["Item Name"].astype(str).unique()) if "Item Name" in data.columns else []
             vendor_list = sorted(data["Recvd From"].astype(str).unique()) if "Recvd From" in data.columns else []
             type_list = sorted(data["Type"].astype(str).unique()) if "Type" in data.columns else []
@@ -189,7 +187,7 @@ def manage_tab(tab_name, worksheet_name):
             with c4: t_filter = st.multiselect("🏷️ Product Type", type_list, key="st_type")
             with c5: trans_filter = st.selectbox("arrows_counterclockwise: Transaction", ["All", "Inward", "Outward"], key="st_trans")
 
-            # APPLY FILTERS
+            # Apply Filters
             filtered_df = filter_by_date(data, d_filter, date_col_name="Date Of Entry")
             if i_filter: filtered_df = filtered_df[filtered_df["Item Name"].isin(i_filter)]
             if v_filter: filtered_df = filtered_df[filtered_df["Recvd From"].isin(v_filter)]
@@ -198,9 +196,9 @@ def manage_tab(tab_name, worksheet_name):
 
             st.divider()
 
-            # LIVE STOCK
+            # 2. LIVE STOCK (VISIBLE TO ALL)
             if not filtered_df.empty and "Item Name" in filtered_df.columns and "Qty" in filtered_df.columns:
-                with st.expander("📊 Live Stock Analysis (Based on Current Filters)", expanded=True):
+                with st.expander("📊 Live Stock Analysis (Based on Filters)", expanded=True):
                     df_calc = filtered_df.copy()
                     df_calc["Qty"] = pd.to_numeric(df_calc["Qty"], errors="coerce").fillna(0)
                     
@@ -233,41 +231,39 @@ def manage_tab(tab_name, worksheet_name):
                             }
                         )
 
-            # TRANSACTION LOG
-            st.write("### 📋 Transaction Log")
-            if filtered_df.empty:
-                df_display = pd.DataFrame(columns=data.columns).drop(columns=["_original_idx"], errors="ignore")
-            else:
-                df_display = filtered_df.copy()
+            # 3. TRANSACTION LOG (HIDDEN FROM ADMIN)
+            # Only users with role "Store" can see the logs and add entries
+            if st.session_state["role"] == "Store":
+                st.write("### 📋 Transaction Log")
+                
+                if filtered_df.empty:
+                    df_display = pd.DataFrame(columns=data.columns).drop(columns=["_original_idx"], errors="ignore")
+                else:
+                    df_display = filtered_df.copy()
 
-            if "Qty" in df_display.columns:
-                df_display["Qty"] = pd.to_numeric(df_display["Qty"], errors='coerce').fillna(0)
-            if "Date Of Entry" in df_display.columns:
-                df_display["Date Of Entry"] = pd.to_datetime(df_display["Date Of Entry"], errors='coerce')
+                if "Qty" in df_display.columns:
+                    df_display["Qty"] = pd.to_numeric(df_display["Qty"], errors='coerce').fillna(0)
+                if "Date Of Entry" in df_display.columns:
+                    df_display["Date Of Entry"] = pd.to_datetime(df_display["Date Of Entry"], errors='coerce')
 
-            is_store_user = (st.session_state["role"] == "Store")
-            disabled_cols = [] if is_store_user else df_display.columns.tolist()
+                edited_df = st.data_editor(
+                    df_display,
+                    use_container_width=True,
+                    num_rows="fixed",
+                    key="store_editor",
+                    disabled=["_original_idx"], 
+                    column_config={
+                        "Qty": st.column_config.NumberColumn("Qty", format="%d"),
+                        "Date Of Entry": st.column_config.DateColumn("Date Of Entry", format="YYYY-MM-DD")
+                    }
+                )
 
-            edited_df = st.data_editor(
-                df_display,
-                use_container_width=True,
-                num_rows="fixed",
-                key="store_editor",
-                disabled=disabled_cols, 
-                column_config={
-                    "Qty": st.column_config.NumberColumn("Qty", format="%d"),
-                    "Date Of Entry": st.column_config.DateColumn("Date Of Entry", format="YYYY-MM-DD")
-                }
-            )
-
-            if is_store_user:
                 clean_view = df_display.drop(columns=["_original_idx"], errors='ignore')
                 clean_edited = edited_df.drop(columns=["_original_idx"], errors='ignore')
                 if not clean_view.equals(clean_edited):
                     if st.button("💾 Save Changes", key="save_store"):
                         save_smart_update(data, edited_df, worksheet_name)
 
-            if is_store_user:
                 st.divider()
                 with st.expander("➕ Update Stock (Add New Entry)", expanded=True):
                     with st.form("store_form"):
@@ -301,8 +297,12 @@ def manage_tab(tab_name, worksheet_name):
                                 }])
                                 save_new_row(data, new_entry, worksheet_name)
                     
-                    # 👇 INJECT JS HERE FOR STORE FORM
                     inject_enter_key_navigation()
+            
+            else:
+                # ADMIN MESSAGE
+                st.divider()
+                st.info("🚫 **Restricted Area:** Transaction Logs and Data Entry are only visible to the Store Incharge.")
         
         # --- TAB 2: PACKING PLANNING ---
         with tab_plan:
@@ -493,7 +493,6 @@ def manage_tab(tab_name, worksheet_name):
                             new_row = pd.DataFrame([{"Date": str(date_val), "Channel Name": channel, "Today's Order": orders, "Today's Dispatch": dispatch, "Return": ret}])
                             save_new_row(data, new_row, worksheet_name)
                     
-                    # 👇 INJECT JS HERE FOR ECOMMERCE FORM
                     inject_enter_key_navigation()
         else:
             st.info("ℹ️ Read-Only View (Admin Access)")
@@ -618,7 +617,6 @@ def manage_tab(tab_name, worksheet_name):
                             nr = pd.DataFrame([{"Date": str(d), "Item": i, "Quantity": q, "Notes": n, "Ready Qty": rq, "Status": stt}])
                             save_new_row(data, nr, worksheet_name)
                 
-                # 👇 INJECT JS FOR STANDARD FORMS
                 inject_enter_key_navigation()
 
 # ------------------------------------------------------------------
