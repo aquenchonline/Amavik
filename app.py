@@ -5,8 +5,8 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import time
-from datetime import date, timedelta, datetime
 import math
+from datetime import date, timedelta, datetime
 
 # ------------------------------------------------------------------
 # 1. PAGE CONFIGURATION
