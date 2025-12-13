@@ -50,7 +50,7 @@ st.markdown("""
         color: #444;
         font-weight: 500;
         box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-        font-size: 1rem; /* Default Desktop Size */
+        font-size: 1rem; 
     }
 
     .stTabs [aria-selected="true"] {
@@ -74,36 +74,40 @@ st.markdown("""
         
         /* 1. Make Tabs Smaller & Scrollable */
         .stTabs [data-baseweb="tab"] {
-            font-size: 0.8rem;  /* Smaller Font */
-            padding: 4px 8px;   /* Tighter Padding */
+            font-size: 0.8rem;
+            padding: 4px 8px;
             height: 35px;
         }
 
-        /* 2. Reduce Text Size in Cards & Body */
+        /* 2. Reduce Text Size */
         p, .stMarkdown, div[data-testid="stMarkdownContainer"] p {
-            font-size: 0.9rem !important;
+            font-size: 0.85rem !important;
         }
         
-        /* 3. Make Metric Numbers Smaller */
+        /* 3. Smaller Metrics */
         div[data-testid="stMetricValue"] {
-            font-size: 1.4rem !important;
+            font-size: 1.2rem !important;
         }
         
         /* 4. Tighter Buttons */
         .stButton button {
-            font-size: 0.85rem;
-            padding-left: 0.5rem;
-            padding-right: 0.5rem;
+            font-size: 0.8rem;
+            padding-left: 0.3rem;
+            padding-right: 0.3rem;
         }
         
-        /* 5. Reduce Header Sizes */
-        h1 { font-size: 1.8rem !important; }
-        h2 { font-size: 1.5rem !important; }
-        h3 { font-size: 1.2rem !important; }
+        /* 5. Headers */
+        h1 { font-size: 1.6rem !important; }
+        h2 { font-size: 1.4rem !important; }
+        h3 { font-size: 1.1rem !important; }
         
-        /* 6. Adjust Card Container Padding */
-        div[data-testid="stVerticalBlock"] {
-            gap: 0.3rem !important;
+        /* 6. FORCE 2 CARDS PER ROW Logic */
+        /* Streamlit stacks columns by default on mobile (100% width). 
+           We force them to 50% width so 2 cards fit side-by-side. */
+        div[data-testid="column"] {
+            width: 50% !important;
+            flex: 0 0 50% !important;
+            min-width: 50% !important;
         }
     }
 </style>
@@ -133,13 +137,14 @@ def inject_enter_key_navigation():
     components.html(js, height=0, width=0)
 
 # ------------------------------------------------------------------
-# 3. USER AUTHENTICATION
+# 3. USER AUTHENTICATION DATABASE
 # ------------------------------------------------------------------
+# 🚀 UPDATED: Removed "Order" from Store, Added to Ecommerce
 USERS = {
     "Production": {"pass": "Amavik@80", "role": "Production", "access": ["Production"]},
     "Packing":    {"pass": "Amavik@97", "role": "Packing",    "access": ["Packing"]},
-    "Store":      {"pass": "Amavik@17", "role": "Store",      "access": ["Store", "Order"]}, 
-    "Ecommerce":  {"pass": "Amavik@12", "role": "Ecommerce",  "access": ["Ecommerce"]},
+    "Store":      {"pass": "Amavik@17", "role": "Store",      "access": ["Store"]}, 
+    "Ecommerce":  {"pass": "Amavik@12", "role": "Ecommerce",  "access": ["Ecommerce", "Order"]},
     "Amar":       {"pass": "Aquench@1933", "role": "Admin",   "access": ["Order", "Production", "Packing", "Store", "Ecommerce", "Configuration"]}
 }
 
@@ -468,7 +473,8 @@ def manage_tab(tab_name, worksheet_name):
         if "Qty" not in data.columns: data["Qty"] = 0
         if "Transaction Type" not in data.columns: data["Transaction Type"] = "Order Received"
 
-        tab_log, tab_summ = st.tabs(["📝 Order/Dispatch Logs (Entry)", "📊 Pending Summary"])
+        # 🚀 RENAMED TABS
+        tab_log, tab_summ = st.tabs(["Order", "Summary"])
         
         with tab_log:
             with st.expander("➕ Add New Order / Dispatch", expanded=True):
