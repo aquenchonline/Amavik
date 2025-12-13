@@ -16,7 +16,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS to make cards smaller/tighter
+# Custom CSS: Smaller cards, red delete button styling
 st.markdown("""
 <style>
     div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column;"] > div[data-testid="stVerticalBlock"] {
@@ -27,6 +27,7 @@ st.markdown("""
         padding-top: 0;
         padding-bottom: 0;
     }
+    /* Style for the delete button specifically if needed, but standard works */
 </style>
 """, unsafe_allow_html=True)
 
@@ -73,7 +74,7 @@ if "logged_in" not in st.session_state:
     st.session_state["role"] = None
 
 if "edit_idx" not in st.session_state:
-    st.session_state["edit_idx"] = None # Generic edit index for cards
+    st.session_state["edit_idx"] = None 
 
 def login():
     st.title("🔒 ERP Secure Login")
@@ -156,8 +157,26 @@ def save_new_row(original_data, new_row_df, sheet_name):
     except Exception as e:
         st.error(f"Error adding row: {e}")
 
+# 👇 NEW DELETE FUNCTION
+def delete_task(original_data, index_to_delete, sheet_name):
+    try:
+        # Check if index exists
+        if index_to_delete in original_data.index:
+            # Drop the row
+            updated_data = original_data.drop(index_to_delete)
+            # Remove any temporary columns before saving
+            final = updated_data.drop(columns=["_original_idx", "_dt_obj", "temp_date", "dt"], errors='ignore')
+            conn.update(spreadsheet=SHEET_URL, worksheet=sheet_name, data=final)
+            st.toast("🗑️ Task Deleted!", icon="✅")
+            st.session_state["edit_idx"] = None
+            st.cache_data.clear()
+            time.sleep(1)
+            st.rerun()
+    except Exception as e:
+        st.error(f"Error deleting: {e}")
+
 # ------------------------------------------------------------------
-# 6. SHARED CARD LOGIC (FOR PRODUCTION & PACKING)
+# 6. SHARED CARD LOGIC
 # ------------------------------------------------------------------
 def render_task_cards(df_display, date_col, role_name, data, worksheet_name):
     # Use 4 columns for compact cards
@@ -167,34 +186,36 @@ def render_task_cards(df_display, date_col, role_name, data, worksheet_name):
         col = cols[i % 4]
         with col:
             prio = int(row.get('Order Priority', 999))
-            # Visual Cue for Priority
             emoji_prio = "🔴" if prio == 1 else "🟡" if prio == 2 else "🟢"
             
             with st.container(border=True):
-                # Compact Header
-                st.markdown(f"**{emoji_prio} {row['Party Name']}**")
+                # HEADER: Name + Delete Button (If Admin)
+                c_head, c_del = st.columns([4, 1])
+                with c_head:
+                    st.markdown(f"**{emoji_prio} {row['Party Name']}**")
+                with c_del:
+                    if st.session_state["role"] == "Admin":
+                        # ❌ DELETE BUTTON
+                        if st.button("❌", key=f"del_{worksheet_name}_{index}", help="Delete this task"):
+                            delete_task(data, index, worksheet_name)
+
                 st.caption(f"Prio: {prio} | {row[date_col]}")
-                
-                # Item & Qty in one compact block
                 st.write(f"**{row['Item Name']}**")
                 
                 c1, c2 = st.columns(2)
                 with c1: st.write(f"**Qty:** {int(row.get('Qty', 0))}")
                 with c2: st.write(f"**Ready:** {int(row.get('Ready Qty', 0))}")
 
-                # Details
                 details = []
                 if row.get('Logo'): details.append(f"Logo: {row['Logo']}")
                 if row.get('Bottom Print'): details.append(f"Print: {row['Bottom Print']}")
                 if row.get('Box'): details.append(f"Box: {row['Box']}")
                 
-                if details:
-                    st.caption(" | ".join(details))
+                if details: st.caption(" | ".join(details))
                 
                 if row.get('Remarks'):
                     st.info(f"{row['Remarks']}", icon="📝")
                 
-                # Action Button
                 btn_label = "✏️ Edit" if st.session_state["role"] == "Admin" else "✅ Update"
                 if st.button(btn_label, key=f"btn_{worksheet_name}_{index}", use_container_width=True):
                     st.session_state["edit_idx"] = index
@@ -203,7 +224,6 @@ def render_task_cards(df_display, date_col, role_name, data, worksheet_name):
 def render_edit_form(edit_idx, data, worksheet_name, date_col):
     if edit_idx in data.index:
         row_data = data.loc[edit_idx]
-        
         st.markdown(f"### ✏️ Editing: {row_data['Item Name']}")
         
         # --- ADMIN: FULL EDIT ---
@@ -220,7 +240,6 @@ def render_edit_form(edit_idx, data, worksheet_name, date_col):
                     new_prio = st.number_input("Priority", value=int(pd.to_numeric(row_data.get('Order Priority',1), errors='coerce')))
                     new_box = st.text_input("Box", row_data.get('Box', ''))
                 
-                # Extra fields for Packing
                 new_logo = row_data.get('Logo', '')
                 new_bot = row_data.get('Bottom Print', '')
                 if worksheet_name == "Packing":
@@ -229,7 +248,6 @@ def render_edit_form(edit_idx, data, worksheet_name, date_col):
                     with c5: new_bot = st.selectbox("Bottom", ["No", "Laser", "Pad"], index=["No", "Laser", "Pad"].index(row_data.get('Bottom Print', 'No')) if row_data.get('Bottom Print') in ["No", "Laser", "Pad"] else 0)
 
                 new_rem = st.text_input("Remarks", row_data.get('Remarks', ''))
-                
                 st.markdown("---")
                 c6, c7 = st.columns(2)
                 with c6: new_ready = st.number_input("Ready Qty", value=int(pd.to_numeric(row_data.get('Ready Qty', 0), errors='coerce')))
@@ -333,21 +351,17 @@ def manage_tab(tab_name, worksheet_name):
         date_col = "Order Date" if "Order Date" in data.columns else "Date"
         data["_dt_obj"] = pd.to_datetime(data[date_col], errors='coerce').dt.date
         
-        # Ensure Priority is Numeric for sorting
         if "Order Priority" in data.columns:
             data["Order Priority"] = pd.to_numeric(data["Order Priority"], errors='coerce').fillna(999)
 
-        # 2. Logic: Today/Past vs Future
+        # 2. Logic
         all_pending = data[data["Status"] != "Complete"].copy()
         today = date.today()
-        
-        # Sort all pending by Priority first, then Date
         all_pending = all_pending.sort_values(by=["Order Priority", "_dt_obj"], ascending=[True, True])
         
         df_today_backlog = all_pending[all_pending["_dt_obj"] <= today].copy()
         df_future = all_pending[all_pending["_dt_obj"] > today].copy()
         
-        # Determine Display Data
         if not df_today_backlog.empty:
             df_display = df_today_backlog
             st.success(f"📅 **Today's & Backlog Tasks** ({len(df_display)}) - Sorted by Priority")
@@ -359,7 +373,7 @@ def manage_tab(tab_name, worksheet_name):
             st.balloons()
             st.success("🎉 All tasks completed! No pending work.")
 
-        # 3. EDIT FORM (If active)
+        # 3. EDIT FORM
         if st.session_state["edit_idx"] is not None:
             render_edit_form(st.session_state["edit_idx"], data, worksheet_name, date_col)
         
@@ -371,13 +385,12 @@ def manage_tab(tab_name, worksheet_name):
         if st.session_state["role"] == "Admin" and st.session_state["edit_idx"] is None:
             render_add_task_form(data, worksheet_name)
 
-        # 6. HISTORY
         st.divider()
         with st.expander("✅ View Completed History"):
             mask_complete = data["Status"] == "Complete"
             st.dataframe(data[mask_complete].drop(columns=["_original_idx", "_dt_obj"], errors="ignore"), use_container_width=True)
 
-        return # End Packing/Production Logic
+        return 
 
     # ===============================================================
     # B. STORE TAB LOGIC
