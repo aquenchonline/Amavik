@@ -102,6 +102,7 @@ st.markdown("""
     /* ======================================= */
     /* CARDS (White, Soft Shadow, Rounded)     */
     /* ======================================= */
+    /* Applies to st.container(border=True) */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background-color: #FFFFFF !important;
         border: none !important;
@@ -435,6 +436,7 @@ def create_spline_chart(df, x_col, y_col, color_col=None):
                 name=group,
                 line=dict(width=3, shape='spline', color=colors[i % len(colors)]),
                 fill='tozeroy',
+                # Create a semi-transparent color for the fill
                 fillcolor=f"rgba{tuple(list(int(colors[i%len(colors)][1:][j:j+2], 16) for j in (0, 2, 4)) + [0.1])}"
             ))
     else:
