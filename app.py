@@ -129,16 +129,25 @@ st.markdown("""
         box-shadow: 0 0 0 3px rgba(93, 135, 255, 0.1);
     }
     
-    /* PAGINATION BUTTONS */
+    /* PAGINATION BUTTONS (Arrows) */
     .pagination-btn button {
         background-color: #ffffff !important;
         color: #5A6A85 !important;
         border: 1px solid #DFE5EF !important;
-        border-radius: 6px !important;
-        height: 2em !important;
-        font-size: 0.8rem !important;
-        padding: 0px 10px !important;
+        border-radius: 50% !important; /* Circular buttons */
+        width: 35px !important;
+        height: 35px !important;
+        font-size: 1.2rem !important;
+        padding: 0 !important;
         box-shadow: none !important;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .pagination-btn button:hover {
+        background-color: #F4F7FE !important;
+        color: #5D87FF !important;
+        border-color: #5D87FF !important;
     }
 
     /* ======================================= */
@@ -197,24 +206,9 @@ st.markdown("""
             flex: 0 0 50% !important;
             min-width: 50% !important;
         }
-
-        /* FIXED SLIDING TABS WITH SPACING */
-        .stTabs [data-baseweb="tab-list"] {
-            display: flex !important;
-            flex-wrap: nowrap !important;
-            overflow-x: auto !important;
-            white-space: nowrap !important;
-            gap: 20px !important;  /* Space between tabs */
-            padding-bottom: 5px; 
-            padding-left: 5px;
-            scrollbar-width: none; 
-        }
-        
         .stTabs [data-baseweb="tab"] {
-            flex: 0 0 auto !important;
-            width: auto !important; /* Auto width based on text */
-            font-size: 0.8rem;
-            padding: 5px 15px; /* Add padding inside tab for clickability */
+            font-size: 0.75rem;
+            padding: 5px 10px;
         }
     }
 </style>
@@ -429,7 +423,6 @@ def render_styled_table(df, key_prefix, editable=False, decimal_format=None):
     if search_query:
         mask = df_filtered.astype(str).apply(lambda x: x.str.contains(search_query, case=False, na=False)).any(axis=1)
         df_filtered = df_filtered[mask]
-        # Reset pagination on search
         if f"page_{key_prefix}" in st.session_state:
              st.session_state[f"page_{key_prefix}"] = 0
 
@@ -462,7 +455,6 @@ def render_styled_table(df, key_prefix, editable=False, decimal_format=None):
     for dc in date_cols:
         st_config[dc] = st.column_config.DateColumn(dc, format="YYYY-MM-DD")
     
-    # Store Tab Decimal Logic (Force 1 decimal max)
     if decimal_format:
         num_cols = df_page.select_dtypes(include=['float', 'int']).columns
         for nc in num_cols:
@@ -497,7 +489,7 @@ def render_styled_table(df, key_prefix, editable=False, decimal_format=None):
             disabled=["_original_idx"]
         )
 
-    # --- 5. PAGINATION CONTROLS ---
+    # --- 5. PAGINATION CONTROLS (Arrows) ---
     st.markdown("---")
     c_info, c_prev, c_page, c_next = st.columns([6, 1, 2, 1])
     
@@ -505,7 +497,7 @@ def render_styled_table(df, key_prefix, editable=False, decimal_format=None):
         st.caption(f"Showing {start_idx + 1} to {min(end_idx, total_rows)} of {total_rows} entries")
     
     with c_prev:
-        if st.button("Previous", key=f"prev_{key_prefix}", disabled=(current_page == 0)):
+        if st.button("◀", key=f"prev_{key_prefix}", disabled=(current_page == 0)):
             st.session_state[f"page_{key_prefix}"] -= 1
             st.rerun()
             
@@ -513,16 +505,16 @@ def render_styled_table(df, key_prefix, editable=False, decimal_format=None):
         st.markdown(f"<div style='text-align:center; padding-top:5px; font-weight:500; color:#5A6A85;'>Page {current_page + 1} of {total_pages}</div>", unsafe_allow_html=True)
         
     with c_next:
-        if st.button("Next", key=f"next_{key_prefix}", disabled=(current_page >= total_pages - 1)):
+        if st.button("▶", key=f"next_{key_prefix}", disabled=(current_page >= total_pages - 1)):
             st.session_state[f"page_{key_prefix}"] += 1
             st.rerun()
 
-    # Apply CSS class for buttons
+    # CSS for circular arrow buttons
     st.markdown("""
     <script>
         var buttons = window.parent.document.querySelectorAll('button[kind="secondary"]');
         buttons.forEach(btn => {
-            if(btn.innerText === "Previous" || btn.innerText === "Next") {
+            if(btn.innerText === "◀" || btn.innerText === "▶") {
                 btn.classList.add("pagination-btn");
             }
         });
@@ -543,8 +535,10 @@ def render_task_cards(df_display, date_col, role_name, data, worksheet_name):
             emoji_prio = "🔴" if prio == 1 else "🟡" if prio == 2 else "🟢"
             
             with st.container(border=True):
-                # Header without Delete button
-                st.caption(f"{emoji_prio} Priority {prio} | {row.get(date_col, '-')}")
+                c_head, c_del = st.columns([5, 1])
+                with c_head:
+                    st.caption(f"{emoji_prio} Priority {prio} | {row.get(date_col, '-')}")
+                # DELETE BUTTON REMOVED from Cards as requested
 
                 if worksheet_name == "Packing":
                     party_name = str(row.get('Party Name', '')).upper()
@@ -658,17 +652,19 @@ def render_add_task_form(data, worksheet_name):
                         save_new_row(data, new_task, worksheet_name)
             else:
                 c1, c2, c3 = st.columns(3)
-                with c1: n_date = st.date_input("Order Date")
-                with c2: n_party = st.text_input("Party Name")
-                with c3: n_logo = st.selectbox("Logo", ["W/O Logo", "Laser", "Pad"])
-                c4, c5 = st.columns(2)
-                with c4: n_item = st.text_input("Item Name")
-                with c5: n_qty = st.number_input("Order Qty", min_value=1.0, step=0.01)
-                c6, c7 = st.columns(2)
-                with c6: n_bot = st.selectbox("Bottom Print", ["No", "Laser", "Pad"])
-                with c7: n_prio = st.number_input("Priority", min_value=1, value=1)
-                n_box = st.selectbox("Box", ["Loose", "Brown Box", "White Box", "Box"])
-                n_rem = st.text_input("Remarks")
+                with c1: 
+                    n_date = st.date_input("Order Date")
+                    n_party = st.text_input("Party Name")
+                    n_logo = st.selectbox("Logo", ["W/O Logo", "Laser", "Pad"])
+                with c2:
+                    n_item = st.text_input("Item Name")
+                    n_qty = st.number_input("Order Qty", min_value=1.0, step=0.01)
+                    n_bot = st.selectbox("Bottom Print", ["No", "Laser", "Pad"])
+                with c3:
+                    n_prio = st.number_input("Priority", min_value=1, value=1)
+                    n_box = st.selectbox("Box", ["Loose", "Brown Box", "White Box", "Box"])
+                    n_rem = st.text_input("Remarks")
+                
                 if st.form_submit_button("🚀 Assign"):
                     if not n_item: st.warning("Item Name Required")
                     else:
@@ -774,7 +770,7 @@ def manage_tab(tab_name, worksheet_name):
         return 
 
     # ===============================================================
-    # B. PRODUCTION & PACKING (4 TABS REDESIGN)
+    # B. PRODUCTION & PACKING
     # ===============================================================
     if worksheet_name in ["Packing", "Production"]:
         c_head, c_btn = st.columns([6, 1])
@@ -884,7 +880,14 @@ def manage_tab(tab_name, worksheet_name):
                 with st.expander("📊 Live Stock Analysis (Based on Current Search)", expanded=True):
                     df_calc = filtered_df.copy()
                     df_calc["Qty"] = pd.to_numeric(df_calc["Qty"], errors="coerce").fillna(0)
-                    stock_summary = df_calc.groupby("Item Name").apply(lambda x: pd.Series({"Inward": x[x["Transaction Type"] == "Inward"]["Qty"].sum(), "Outward": x[x["Transaction Type"] == "Outward"]["Qty"].sum()})).reset_index()
+                    
+                    # Store Logic with Type
+                    stock_summary = df_calc.groupby("Item Name").agg(
+                        Type=('Type', 'first'),
+                        Inward=('Qty', lambda x: x[df_calc.loc[x.index, "Transaction Type"] == "Inward"].sum()),
+                        Outward=('Qty', lambda x: x[df_calc.loc[x.index, "Transaction Type"] == "Outward"].sum())
+                    ).reset_index()
+                    
                     stock_summary["Balance"] = stock_summary["Inward"] - stock_summary["Outward"]
                     render_styled_table(stock_summary.round(1), "stock", decimal_format="%.1f")
 
@@ -935,10 +938,22 @@ def manage_tab(tab_name, worksheet_name):
                 packing_data["dt_obj"] = pd.to_datetime(packing_data[d_col], errors='coerce').dt.date
                 mask_plan = (packing_data["dt_obj"] >= (date.today() - timedelta(days=7))) & (packing_data["dt_obj"] <= (date.today() + timedelta(days=5)))
                 plan_df = packing_data[mask_plan].copy()
-                if "Qty" in plan_df.columns: 
-                    plan_df["Qty"] = pd.to_numeric(plan_df["Qty"], errors='coerce').fillna(0).astype(float).round(1)
                 
-                render_styled_table(plan_df, "plan", decimal_format="%.1f")
+                # Cleanup Duplicate Party Name
+                cols_to_show = []
+                if d_col in plan_df.columns: cols_to_show.append(d_col)
+                if "Party Name" in plan_df.columns: cols_to_show.append("Party Name")
+                if "Item Name" in plan_df.columns: cols_to_show.append("Item Name")
+                if "Qty" in plan_df.columns: cols_to_show.append("Qty")
+                
+                # Remove duplicates from list if any
+                cols_to_show = list(dict.fromkeys(cols_to_show))
+                
+                final_plan = plan_df[cols_to_show].copy()
+                if "Qty" in final_plan.columns: 
+                    final_plan["Qty"] = pd.to_numeric(final_plan["Qty"], errors='coerce').fillna(0).astype(float).round(1)
+                
+                render_styled_table(final_plan, "plan", decimal_format="%.1f")
             else: st.info("Empty")
         return
 
