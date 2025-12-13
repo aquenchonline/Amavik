@@ -72,7 +72,8 @@ except Exception as e:
 # ------------------------------------------------------------------
 def filter_by_date(df, filter_option, date_col_name="Date"):
     if df.empty: return df
-    # Handle different column names for date
+    df = df.copy() # Work on a copy
+    # Coerce date column
     df["temp_date"] = pd.to_datetime(df[date_col_name], errors='coerce').dt.date
     today = date.today()
     mask = pd.Series([False] * len(df))
@@ -138,10 +139,9 @@ def manage_tab(tab_name, worksheet_name):
     # A. STORE TAB LOGIC (INVENTORY SYSTEM)
     # ===============================================================
     if worksheet_name == "Store":
-        # Initialize safe default
         df_display = pd.DataFrame()
 
-        # --- HEADER & REFRESH ---
+        # Header & Refresh
         c_title, c_ref = st.columns([8, 1])
         with c_title: st.subheader("📦 Store Inventory Management")
         with c_ref:
@@ -149,14 +149,12 @@ def manage_tab(tab_name, worksheet_name):
                 st.cache_data.clear()
                 st.rerun()
 
-        # --- 1. CURRENT STOCK LEVEL (Automatic Calculation) ---
+        # Live Stock Levels
         if not data.empty and "Item Name" in data.columns and "Qty" in data.columns:
             with st.expander("📊 View Live Stock Levels (Calculated)", expanded=True):
-                # Ensure numeric
                 df_calc = data.copy()
                 df_calc["Qty"] = pd.to_numeric(df_calc["Qty"], errors="coerce").fillna(0)
                 
-                # Group by Item and Transaction Type
                 stock_summary = []
                 unique_items = df_calc["Item Name"].unique()
                 
@@ -166,7 +164,6 @@ def manage_tab(tab_name, worksheet_name):
                     outward = item_data[item_data["Transaction Type"] == "Outward"]["Qty"].sum()
                     balance = inward - outward
                     
-                    # Get the most recent UOM and Type for display
                     last_entry = item_data.iloc[-1]
                     uom = last_entry["UOM"] if "UOM" in last_entry else ""
                     i_type = last_entry["Type"] if "Type" in last_entry else ""
@@ -182,9 +179,8 @@ def manage_tab(tab_name, worksheet_name):
                 
                 df_stock = pd.DataFrame(stock_summary)
                 if not df_stock.empty:
-                    # Formatting for cleaner look
                     st.dataframe(
-                        df_stock.style.highlight_between(left=0, right=0, subset=["Available Balance"], color="#ffcdd2"), # Red if 0
+                        df_stock.style.highlight_between(left=0, right=0, subset=["Available Balance"], color="#ffcdd2"),
                         use_container_width=True,
                         column_config={
                             "Available Balance": st.column_config.NumberColumn("Current Stock", format="%d"),
@@ -197,19 +193,14 @@ def manage_tab(tab_name, worksheet_name):
 
         st.divider()
 
-        # --- 2. FILTERS (SEARCH) ---
+        # Filters
         c1, c2, c3, c4 = st.columns(4)
-        with c1: 
-            d_filter = st.selectbox("📅 Date Filter", ["All", "Today", "Yesterday", "Prev 7 Days", "This Month"], key="st_date")
-        with c2:
-            items_list = sorted(data["Item Name"].astype(str).unique()) if "Item Name" in data.columns else []
-            i_filter = st.multiselect("📦 Item Search", items_list, key="st_item")
-        with c3:
-            # Recvd From acts as Vendor/Client
-            vendor_list = sorted(data["Recvd From"].astype(str).unique()) if "Recvd From" in data.columns else []
-            v_filter = st.multiselect("busts_in_silhouette: Recvd From", vendor_list, key="st_vendor")
-        with c4:
-            trans_filter = st.selectbox("arrows_counterclockwise: Transaction", ["All", "Inward", "Outward"], key="st_trans")
+        with c1: d_filter = st.selectbox("📅 Date Filter", ["All", "Today", "Yesterday", "Prev 7 Days", "This Month"], key="st_date")
+        with c2: items_list = sorted(data["Item Name"].astype(str).unique()) if "Item Name" in data.columns else []
+        i_filter = st.multiselect("📦 Item Search", items_list, key="st_item")
+        with c3: vendor_list = sorted(data["Recvd From"].astype(str).unique()) if "Recvd From" in data.columns else []
+        v_filter = st.multiselect("busts_in_silhouette: Recvd From", vendor_list, key="st_vendor")
+        with c4: trans_filter = st.selectbox("arrows_counterclockwise: Transaction", ["All", "Inward", "Outward"], key="st_trans")
 
         # Apply Filters
         filtered_df = filter_by_date(data, d_filter, date_col_name="Date Of Entry")
@@ -217,24 +208,23 @@ def manage_tab(tab_name, worksheet_name):
         if v_filter: filtered_df = filtered_df[filtered_df["Recvd From"].isin(v_filter)]
         if trans_filter != "All": filtered_df = filtered_df[filtered_df["Transaction Type"] == trans_filter]
 
-        # --- 3. DATA LOG (TRANSACTION HISTORY) ---
         st.write("### 📋 Transaction Log")
         
-        # Setup Display DataFrame
+        # --- FIX: ENSURE DATA TYPES BEFORE EDITOR ---
         if filtered_df.empty:
             df_display = pd.DataFrame(columns=data.columns).drop(columns=["_original_idx"], errors="ignore")
         else:
-            df_display = filtered_df
+            df_display = filtered_df.copy() # Copy to avoid warnings
 
-        # Permissions: Store User can Add, Admin can Edit.
-        # Store User should probably just View the log to verify, and use Add form.
-        # We'll allow editing for small fixes.
+        # 1. Force Qty to Number
+        if "Qty" in df_display.columns:
+            df_display["Qty"] = pd.to_numeric(df_display["Qty"], errors='coerce').fillna(0)
         
+        # 2. Force Date to Date Object
+        if "Date Of Entry" in df_display.columns:
+            df_display["Date Of Entry"] = pd.to_datetime(df_display["Date Of Entry"], errors='coerce')
+
         disabled_cols = ["_original_idx"]
-        if st.session_state["role"] != "Admin":
-            # Store user can edit basic info but maybe keep it restricted to avoid messing up history?
-            # Let's allow full edit for flexibility, but Admin is safer.
-            pass 
 
         edited_df = st.data_editor(
             df_display,
@@ -244,11 +234,10 @@ def manage_tab(tab_name, worksheet_name):
             disabled=disabled_cols if st.session_state["role"] == "Admin" else ["_original_idx"],
             column_config={
                 "Qty": st.column_config.NumberColumn("Qty", format="%d"),
-                "Date Of Entry": st.column_config.DateColumn("Date")
+                "Date Of Entry": st.column_config.DateColumn("Date Of Entry", format="YYYY-MM-DD")
             }
         )
 
-        # Save Logic
         clean_view = df_display.drop(columns=["_original_idx"], errors='ignore')
         clean_edited = edited_df.drop(columns=["_original_idx"], errors='ignore')
         
@@ -256,30 +245,21 @@ def manage_tab(tab_name, worksheet_name):
             if st.button("💾 Save Changes", key="save_store"):
                 save_smart_update(data, edited_df, worksheet_name)
 
-        # --- 4. ADD NEW TRANSACTION FORM ---
         st.divider()
         with st.expander("➕ Update Stock (Add New Entry)", expanded=True):
             with st.form("store_form"):
-                
-                # Row 1
                 c1, c2, c3 = st.columns(3)
                 with c1: date_ent = st.date_input("Date Of Entry", value=date.today())
                 with c2: trans_type = st.selectbox("Transaction Type", ["Inward", "Outward"])
                 with c3: qty = st.number_input("Quantity", min_value=1, step=1)
-
-                # Row 2
                 c4, c5, c6 = st.columns(3)
-                with c4: item_name = st.text_input("Item Name (e.g. STELLO STEEL 1000ML)")
+                with c4: item_name = st.text_input("Item Name")
                 with c5: uom = st.selectbox("UOM", ["Pcs", "Boxes", "Kg", "Ltr", "Set", "Packet"])
                 with c6: i_type = st.selectbox("Type", ["Inner Box", "Outer Box", "Washer", "String", "Cap", "Bubble", "Bottle", "Other"])
-
-                # Row 3
                 c7, c8, c9 = st.columns(3)
                 with c7: recvd_from = st.text_input("Recvd From / Sent To")
                 with c8: vendor_brand = st.text_input("Vendor Name (Brand)")
-                with c9: 
-                    # Invoice only needed for Inward usually
-                    invoice_no = st.text_input("Invoice No. (Inward Only)")
+                with c9: invoice_no = st.text_input("Invoice No. (Inward Only)")
 
                 if st.form_submit_button("Submit Transaction"):
                     if not item_name:
@@ -298,15 +278,13 @@ def manage_tab(tab_name, worksheet_name):
                         }])
                         save_new_row(data, new_entry, worksheet_name)
         
-        return # End Store Logic
+        return 
 
     # ===============================================================
     # B. ECOMMERCE DASHBOARD LOGIC
     # ===============================================================
     if worksheet_name == "Ecommerce":
         df_curr = pd.DataFrame()
-
-        # Header & Refresh
         c_head, c_ch, c_date, c_ref = st.columns([2, 1, 1, 0.5])
         with c_head: st.subheader("📊 Performance Overview")
         with c_ref:
@@ -324,7 +302,6 @@ def manage_tab(tab_name, worksheet_name):
         with c_ch: selected_channel = st.selectbox("Select Channel", unique_channels, index=0)
         with c_date: selected_period = st.selectbox("Compare Period", ["Today", "Yesterday", "Last 7 Days", "Last 15 Days", "Last 30 Days", "This Month", "All Time"], index=0)
 
-        # KPI Logic
         if not data.empty:
             df_calc = data.copy()
             df_calc["dt"] = pd.to_datetime(df_calc["Date"], errors='coerce').dt.date
@@ -384,7 +361,6 @@ def manage_tab(tab_name, worksheet_name):
 
         st.divider()
 
-        # Charts
         st.subheader("📈 Visual Trends")
         if not data.empty:
             df_viz = data.copy()
@@ -415,7 +391,6 @@ def manage_tab(tab_name, worksheet_name):
 
         st.divider()
 
-        # Data Table
         st.write("### 📋 Detailed Logs")
         if df_curr.empty:
             display_df = pd.DataFrame(columns=data.columns).drop(columns=["dt"], errors="ignore") if not data.empty else pd.DataFrame()
