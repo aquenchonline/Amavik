@@ -7,7 +7,7 @@ import time
 from datetime import date, timedelta, datetime
 
 # ------------------------------------------------------------------
-# 1. PAGE CONFIGURATION
+# 1. PAGE CONFIGURATION & CSS
 # ------------------------------------------------------------------
 st.set_page_config(
     page_title="ERP System", 
@@ -16,10 +16,24 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Custom CSS to make cards smaller/tighter
+st.markdown("""
+<style>
+    div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column;"] > div[data-testid="stVerticalBlock"] {
+        gap: 0.5rem;
+    }
+    .stButton button {
+        height: 2em;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1S6xS6hcdKSPtzKxCL005GwvNWQNspNffNveI3P9zCgw/edit"
 
 # ------------------------------------------------------------------
-# 2. JAVASCRIPT HELPER (ENTER KEY NAVIGATION)
+# 2. JAVASCRIPT HELPER
 # ------------------------------------------------------------------
 def inject_enter_key_navigation():
     js = """
@@ -31,9 +45,7 @@ def inject_enter_key_navigation():
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     var next = inputs[index + 1];
-                    if (next) {
-                        next.focus();
-                    }
+                    if (next) { next.focus(); }
                 }
             });
         });
@@ -42,7 +54,7 @@ def inject_enter_key_navigation():
     components.html(js, height=0, width=0)
 
 # ------------------------------------------------------------------
-# 3. USER AUTHENTICATION DATABASE
+# 3. USER DB
 # ------------------------------------------------------------------
 USERS = {
     "Production": {"pass": "Amavik@80", "role": "Production", "access": ["Production"]},
@@ -53,16 +65,15 @@ USERS = {
 }
 
 # ------------------------------------------------------------------
-# 4. SESSION STATE (LOGIN SYSTEM)
+# 4. SESSION STATE
 # ------------------------------------------------------------------
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
     st.session_state["user"] = None
     st.session_state["role"] = None
 
-# State to track which Packing Card is being edited
-if "packing_edit_idx" not in st.session_state:
-    st.session_state["packing_edit_idx"] = None
+if "edit_idx" not in st.session_state:
+    st.session_state["edit_idx"] = None # Generic edit index for cards
 
 def login():
     st.title("🔒 ERP Secure Login")
@@ -70,7 +81,6 @@ def login():
     with col2:
         username = st.text_input("User ID")
         password = st.text_input("Password", type="password")
-        
         if st.button("Login", type="primary", use_container_width=True):
             if username in USERS and USERS[username]["pass"] == password:
                 st.session_state["logged_in"] = True
@@ -84,11 +94,11 @@ def login():
 def logout():
     st.session_state["logged_in"] = False
     st.session_state["user"] = None
-    st.session_state["packing_edit_idx"] = None
+    st.session_state["edit_idx"] = None
     st.rerun()
 
 # ------------------------------------------------------------------
-# 5. DATABASE CONNECTION
+# 5. CONNECTION & HELPERS
 # ------------------------------------------------------------------
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
@@ -96,16 +106,12 @@ except Exception as e:
     st.error(f"🚨 Connection Error: {e}")
     st.stop()
 
-# ------------------------------------------------------------------
-# 6. HELPER FUNCTIONS
-# ------------------------------------------------------------------
 def filter_by_date(df, filter_option, date_col_name="Date"):
     if df.empty: return df
     df = df.copy() 
     df["temp_date"] = pd.to_datetime(df[date_col_name], errors='coerce').dt.date
     today = date.today()
     mask = pd.Series([False] * len(df))
-    
     if filter_option == "All": return df.drop(columns=["temp_date"])
     elif filter_option == "Today": mask = df["temp_date"] == today
     elif filter_option == "Yesterday": mask = df["temp_date"] == (today - timedelta(days=1))
@@ -114,7 +120,6 @@ def filter_by_date(df, filter_option, date_col_name="Date"):
     elif filter_option == "Prev 30 Days": mask = (df["temp_date"] >= (today - timedelta(days=30))) & (df["temp_date"] < today)
     elif filter_option == "Prev All": mask = df["temp_date"] < today
     elif filter_option == "This Month": mask = (df["temp_date"] >= today.replace(day=1)) & (df["temp_date"] <= today)
-    
     return df[mask].drop(columns=["temp_date"])
 
 def save_smart_update(original_data, edited_subset, sheet_name):
@@ -131,8 +136,8 @@ def save_smart_update(original_data, edited_subset, sheet_name):
         
         final = original_data.drop(columns=["_original_idx"], errors='ignore')
         conn.update(spreadsheet=SHEET_URL, worksheet=sheet_name, data=final)
-        st.toast("✅ Saved Successfully!", icon="💾")
-        st.session_state["packing_edit_idx"] = None
+        st.toast("✅ Saved!", icon="💾")
+        st.session_state["edit_idx"] = None
         st.cache_data.clear()
         time.sleep(1)
         st.rerun()
@@ -152,6 +157,158 @@ def save_new_row(original_data, new_row_df, sheet_name):
         st.error(f"Error adding row: {e}")
 
 # ------------------------------------------------------------------
+# 6. SHARED CARD LOGIC (FOR PRODUCTION & PACKING)
+# ------------------------------------------------------------------
+def render_task_cards(df_display, date_col, role_name, data, worksheet_name):
+    # Use 4 columns for compact cards
+    cols = st.columns(4)
+    
+    for i, (index, row) in enumerate(df_display.iterrows()):
+        col = cols[i % 4]
+        with col:
+            prio = int(row.get('Order Priority', 999))
+            # Visual Cue for Priority
+            emoji_prio = "🔴" if prio == 1 else "🟡" if prio == 2 else "🟢"
+            
+            with st.container(border=True):
+                # Compact Header
+                st.markdown(f"**{emoji_prio} {row['Party Name']}**")
+                st.caption(f"Prio: {prio} | {row[date_col]}")
+                
+                # Item & Qty in one compact block
+                st.write(f"**{row['Item Name']}**")
+                
+                c1, c2 = st.columns(2)
+                with c1: st.write(f"**Qty:** {int(row.get('Qty', 0))}")
+                with c2: st.write(f"**Ready:** {int(row.get('Ready Qty', 0))}")
+
+                # Details
+                details = []
+                if row.get('Logo'): details.append(f"Logo: {row['Logo']}")
+                if row.get('Bottom Print'): details.append(f"Print: {row['Bottom Print']}")
+                if row.get('Box'): details.append(f"Box: {row['Box']}")
+                
+                if details:
+                    st.caption(" | ".join(details))
+                
+                if row.get('Remarks'):
+                    st.info(f"{row['Remarks']}", icon="📝")
+                
+                # Action Button
+                btn_label = "✏️ Edit" if st.session_state["role"] == "Admin" else "✅ Update"
+                if st.button(btn_label, key=f"btn_{worksheet_name}_{index}", use_container_width=True):
+                    st.session_state["edit_idx"] = index
+                    st.rerun()
+
+def render_edit_form(edit_idx, data, worksheet_name, date_col):
+    if edit_idx in data.index:
+        row_data = data.loc[edit_idx]
+        
+        st.markdown(f"### ✏️ Editing: {row_data['Item Name']}")
+        
+        # --- ADMIN: FULL EDIT ---
+        if st.session_state["role"] == "Admin":
+            with st.form(f"admin_{worksheet_name}_edit"):
+                c1, c2, c3 = st.columns(3)
+                with c1: 
+                    new_date = st.date_input("Order Date", pd.to_datetime(row_data[date_col]).date())
+                    new_party = st.text_input("Party Name", row_data.get('Party Name', ''))
+                with c2:
+                    new_item = st.text_input("Item Name", row_data.get('Item Name', ''))
+                    new_qty = st.number_input("Target Qty", value=int(pd.to_numeric(row_data.get('Qty',0), errors='coerce')))
+                with c3:
+                    new_prio = st.number_input("Priority", value=int(pd.to_numeric(row_data.get('Order Priority',1), errors='coerce')))
+                    new_box = st.text_input("Box", row_data.get('Box', ''))
+                
+                # Extra fields for Packing
+                new_logo = row_data.get('Logo', '')
+                new_bot = row_data.get('Bottom Print', '')
+                if worksheet_name == "Packing":
+                    c4, c5 = st.columns(2)
+                    with c4: new_logo = st.selectbox("Logo", ["W/O Logo", "Laser", "Pad"], index=["W/O Logo", "Laser", "Pad"].index(row_data.get('Logo', 'W/O Logo')) if row_data.get('Logo') in ["W/O Logo", "Laser", "Pad"] else 0)
+                    with c5: new_bot = st.selectbox("Bottom", ["No", "Laser", "Pad"], index=["No", "Laser", "Pad"].index(row_data.get('Bottom Print', 'No')) if row_data.get('Bottom Print') in ["No", "Laser", "Pad"] else 0)
+
+                new_rem = st.text_input("Remarks", row_data.get('Remarks', ''))
+                
+                st.markdown("---")
+                c6, c7 = st.columns(2)
+                with c6: new_ready = st.number_input("Ready Qty", value=int(pd.to_numeric(row_data.get('Ready Qty', 0), errors='coerce')))
+                with c7: new_status = st.selectbox("Status", ["Pending", "Next Day", "Complete"], index=["Pending", "Next Day", "Complete"].index(row_data.get('Status', 'Pending')))
+
+                if st.form_submit_button("💾 Save Changes"):
+                    updated_row = pd.DataFrame([row_data])
+                    updated_row.at[edit_idx, date_col] = str(new_date)
+                    updated_row.at[edit_idx, "Party Name"] = new_party
+                    updated_row.at[edit_idx, "Item Name"] = new_item
+                    updated_row.at[edit_idx, "Qty"] = new_qty
+                    updated_row.at[edit_idx, "Order Priority"] = new_prio
+                    updated_row.at[edit_idx, "Box"] = new_box
+                    updated_row.at[edit_idx, "Logo"] = new_logo
+                    updated_row.at[edit_idx, "Bottom Print"] = new_bot
+                    updated_row.at[edit_idx, "Remarks"] = new_rem
+                    updated_row.at[edit_idx, "Ready Qty"] = new_ready
+                    updated_row.at[edit_idx, "Status"] = new_status
+                    updated_row["_original_idx"] = edit_idx
+                    save_smart_update(data, updated_row, worksheet_name)
+
+        # --- USER: UPDATE STATUS ONLY ---
+        else:
+            with st.form(f"user_{worksheet_name}_update"):
+                c1, c2 = st.columns(2)
+                with c1: new_ready = st.number_input("Ready Qty", value=int(pd.to_numeric(row_data.get('Ready Qty', 0), errors='coerce')))
+                with c2: new_status = st.selectbox("Status", ["Pending", "Next Day", "Complete"], index=["Pending", "Next Day", "Complete"].index(row_data.get('Status', 'Pending')))
+                
+                if st.form_submit_button("✅ Update"):
+                    updated_row = pd.DataFrame([row_data])
+                    updated_row.at[edit_idx, "Ready Qty"] = new_ready
+                    updated_row.at[edit_idx, "Status"] = new_status
+                    updated_row["_original_idx"] = edit_idx
+                    save_smart_update(data, updated_row, worksheet_name)
+        
+        if st.button("❌ Close Edit"):
+            st.session_state["edit_idx"] = None
+            st.rerun()
+
+def render_add_task_form(data, worksheet_name):
+    st.divider()
+    with st.expander(f"➕ Assign New {worksheet_name} Task", expanded=False):
+        with st.form(f"new_{worksheet_name}_task"):
+            c1, c2, c3 = st.columns(3)
+            with c1: 
+                n_date = st.date_input("Order Date")
+                n_party = st.text_input("Party Name")
+                n_logo = st.selectbox("Logo", ["W/O Logo", "Laser", "Pad"])
+            with c2:
+                n_item = st.text_input("Item Name")
+                n_qty = st.number_input("Target Qty", min_value=1)
+                n_bot = st.selectbox("Bottom Print", ["No", "Laser", "Pad"])
+            with c3:
+                n_prio = st.number_input("Priority", min_value=1, value=1, help="1 is Highest Priority")
+                n_box = st.selectbox("Box", ["Loose", "Brown Box", "White Box", "Box"])
+                n_rem = st.text_input("Remarks")
+            
+            if st.form_submit_button("🚀 Assign Task"):
+                if not n_item:
+                    st.warning("Item Name Required")
+                else:
+                    new_task = pd.DataFrame([{
+                        "Date": str(date.today()), 
+                        "Order Date": str(n_date),
+                        "Order Priority": n_prio,
+                        "Item Name": n_item,
+                        "Party Name": n_party,
+                        "Qty": n_qty,
+                        "Logo": n_logo,
+                        "Bottom Print": n_bot,
+                        "Box": n_box,
+                        "Remarks": n_rem,
+                        "Ready Qty": 0,
+                        "Status": "Pending"
+                    }])
+                    save_new_row(data, new_task, worksheet_name)
+        inject_enter_key_navigation()
+
+# ------------------------------------------------------------------
 # 7. MAIN LOGIC: MANAGE TAB
 # ------------------------------------------------------------------
 def manage_tab(tab_name, worksheet_name):
@@ -165,10 +322,10 @@ def manage_tab(tab_name, worksheet_name):
         data['_original_idx'] = data.index
 
     # ===============================================================
-    # A. PACKING TAB (PRIORITY CARDS)
+    # A. PRODUCTION & PACKING (PRIORITY CARD VIEW)
     # ===============================================================
-    if worksheet_name == "Packing":
-        st.subheader("📦 Packing Department Tasks")
+    if worksheet_name in ["Packing", "Production"]:
+        st.subheader(f"📦 {worksheet_name} Tasks")
         
         # 1. Prepare Data
         if "Party Name" not in data.columns: data["Party Name"] = ""
@@ -176,166 +333,51 @@ def manage_tab(tab_name, worksheet_name):
         date_col = "Order Date" if "Order Date" in data.columns else "Date"
         data["_dt_obj"] = pd.to_datetime(data[date_col], errors='coerce').dt.date
         
+        # Ensure Priority is Numeric for sorting
+        if "Order Priority" in data.columns:
+            data["Order Priority"] = pd.to_numeric(data["Order Priority"], errors='coerce').fillna(999)
+
         # 2. Logic: Today/Past vs Future
         all_pending = data[data["Status"] != "Complete"].copy()
         today = date.today()
+        
+        # Sort all pending by Priority first, then Date
+        all_pending = all_pending.sort_values(by=["Order Priority", "_dt_obj"], ascending=[True, True])
+        
         df_today_backlog = all_pending[all_pending["_dt_obj"] <= today].copy()
         df_future = all_pending[all_pending["_dt_obj"] > today].copy()
         
+        # Determine Display Data
         if not df_today_backlog.empty:
             df_display = df_today_backlog
-            st.success(f"📅 Showing **Today's & Overdue** Tasks ({len(df_display)})")
+            st.success(f"📅 **Today's & Backlog Tasks** ({len(df_display)}) - Sorted by Priority")
         elif not df_future.empty:
             df_display = df_future
-            st.info(f"🚀 Today's work done! Showing **Upcoming** Tasks ({len(df_display)})")
+            st.info(f"🚀 Today's work done! Showing **Upcoming Tasks** ({len(df_display)})")
         else:
             df_display = pd.DataFrame() 
             st.balloons()
             st.success("🎉 All tasks completed! No pending work.")
 
-        # 3. Sort by Priority
-        if not df_display.empty and "Order Priority" in df_display.columns:
-            df_display["Order Priority"] = pd.to_numeric(df_display["Order Priority"], errors='coerce').fillna(999)
-            df_display = df_display.sort_values(by=["Order Priority"], ascending=True)
+        # 3. EDIT FORM (If active)
+        if st.session_state["edit_idx"] is not None:
+            render_edit_form(st.session_state["edit_idx"], data, worksheet_name, date_col)
+        
+        # 4. SHOW CARDS
+        elif not df_display.empty:
+            render_task_cards(df_display, date_col, st.session_state["role"], data, worksheet_name)
 
-        # 4. EDIT FORM LOGIC
-        if st.session_state["packing_edit_idx"] is not None:
-            edit_idx = st.session_state["packing_edit_idx"]
-            
-            if edit_idx in data.index:
-                row_data = data.loc[edit_idx]
-                
-                # --- ADMIN VIEW: FULL EDIT ---
-                if st.session_state["role"] == "Admin":
-                    st.warning(f"✏️ **Admin Edit:** {row_data['Item Name']}")
-                    with st.form("admin_pack_edit"):
-                        c1, c2, c3 = st.columns(3)
-                        with c1: 
-                            new_date = st.date_input("Date", pd.to_datetime(row_data[date_col]).date())
-                            new_party = st.text_input("Party Name", row_data['Party Name'])
-                        with c2:
-                            new_item = st.text_input("Item Name", row_data['Item Name'])
-                            new_qty = st.number_input("Order Qty", value=int(pd.to_numeric(row_data['Qty'], errors='coerce') or 0))
-                        with c3:
-                            new_prio = st.number_input("Priority", value=int(pd.to_numeric(row_data['Order Priority'], errors='coerce') or 1))
-                            new_box = st.text_input("Box Type", row_data.get('Box', ''))
-                        
-                        new_rem = st.text_input("Remarks", row_data.get('Remarks', ''))
-                        st.markdown("---")
-                        c4, c5 = st.columns(2)
-                        with c4: new_ready = st.number_input("Ready Qty", value=int(pd.to_numeric(row_data['Ready Qty'], errors='coerce') or 0))
-                        with c5: new_status = st.selectbox("Status", ["Pending", "Next Day", "Complete"], index=["Pending", "Next Day", "Complete"].index(row_data['Status']))
+        # 5. ADMIN ADD TASK
+        if st.session_state["role"] == "Admin" and st.session_state["edit_idx"] is None:
+            render_add_task_form(data, worksheet_name)
 
-                        if st.form_submit_button("💾 Save Changes"):
-                            updated_row = pd.DataFrame([row_data])
-                            updated_row.at[edit_idx, date_col] = str(new_date)
-                            updated_row.at[edit_idx, "Party Name"] = new_party
-                            updated_row.at[edit_idx, "Item Name"] = new_item
-                            updated_row.at[edit_idx, "Qty"] = new_qty
-                            updated_row.at[edit_idx, "Order Priority"] = new_prio
-                            updated_row.at[edit_idx, "Box"] = new_box
-                            updated_row.at[edit_idx, "Remarks"] = new_rem
-                            updated_row.at[edit_idx, "Ready Qty"] = new_ready
-                            updated_row.at[edit_idx, "Status"] = new_status
-                            updated_row["_original_idx"] = edit_idx
-                            save_smart_update(data, updated_row, worksheet_name)
-
-                # --- PACKING USER VIEW ---
-                else:
-                    st.info(f"📝 **Update Task:** {row_data['Item Name']}")
-                    with st.form("packing_update_form"):
-                        c1, c2 = st.columns(2)
-                        with c1: new_ready = st.number_input("Ready Qty", value=int(pd.to_numeric(row_data.get("Ready Qty", 0), errors='coerce')))
-                        with c2: new_status = st.selectbox("Status", ["Pending", "Next Day", "Complete"], index=["Pending", "Next Day", "Complete"].index(row_data.get("Status", "Pending")))
-                        
-                        if st.form_submit_button("✅ Save Update"):
-                            updated_row = pd.DataFrame([row_data])
-                            updated_row.at[edit_idx, "Ready Qty"] = new_ready
-                            updated_row.at[edit_idx, "Status"] = new_status
-                            updated_row["_original_idx"] = edit_idx
-                            save_smart_update(data, updated_row, worksheet_name)
-                
-                if st.button("❌ Cancel Editing"):
-                    st.session_state["packing_edit_idx"] = None
-                    st.rerun()
-
-        # 5. RENDER CARDS GRID
-        if st.session_state["packing_edit_idx"] is None and not df_display.empty:
-            cols = st.columns(3)
-            for i, (index, row) in enumerate(df_display.iterrows()):
-                col = cols[i % 3]
-                with col:
-                    prio = row.get('Order Priority', 99)
-                    emoji_prio = "🔴" if prio == 1 else "🟡" if prio == 2 else "🟢"
-                    
-                    with st.container(border=True):
-                        st.markdown(f"### {emoji_prio} {row['Party Name']}")
-                        st.caption(f"Priority: {prio} | Date: {row[date_col]}")
-                        st.markdown("---")
-                        st.markdown(f"**Item:** {row['Item Name']}")
-                        ic1, ic2 = st.columns(2)
-                        with ic1: st.metric("Target Qty", row['Qty'])
-                        with ic2: st.metric("Ready Qty", row.get('Ready Qty', 0))
-                        
-                        st.caption(f"🎨 Logo: {row.get('Logo', '-')}")
-                        st.caption(f"🖨️ Bottom: {row.get('Bottom Print', '-')}")
-                        st.caption(f"📦 Box: {row.get('Box', '-')}")
-                        
-                        if row.get('Remarks'): st.warning(f"📝 {row['Remarks']}")
-                        
-                        btn_label = "✏️ Edit Task" if st.session_state["role"] == "Admin" else "✅ Update Status"
-                        if st.button(btn_label, key=f"btn_p_{index}", use_container_width=True):
-                            st.session_state["packing_edit_idx"] = index
-                            st.rerun()
-
-        # --- 👇 ADD NEW TASK (ADMIN ONLY) ---
-        if st.session_state["role"] == "Admin" and st.session_state["packing_edit_idx"] is None:
-            st.divider()
-            with st.expander("➕ Assign New Packing Task", expanded=False):
-                with st.form("new_packing_task_form"):
-                    st.write("### Create New Task")
-                    c1, c2, c3 = st.columns(3)
-                    with c1: 
-                        n_date = st.date_input("Order Date")
-                        n_party = st.text_input("Party Name")
-                        n_logo = st.selectbox("Logo", ["W/O Logo", "Laser", "Pad"])
-                    with c2:
-                        n_item = st.text_input("Item Name")
-                        n_qty = st.number_input("Order Qty", min_value=1)
-                        n_bot = st.selectbox("Bottom Print", ["No", "Laser", "Pad"])
-                    with c3:
-                        n_prio = st.number_input("Priority", min_value=1, value=3)
-                        n_box = st.selectbox("Box", ["Loose", "Brown Box", "White Box", "Box"])
-                        n_rem = st.text_input("Remarks")
-                    
-                    if st.form_submit_button("🚀 Assign Task"):
-                        if not n_item:
-                            st.warning("Item Name Required")
-                        else:
-                            new_task = pd.DataFrame([{
-                                "Date": str(date.today()), # Entry Date
-                                "Order Date": str(n_date),
-                                "Order Priority": n_prio,
-                                "Item Name": n_item,
-                                "Party Name": n_party,
-                                "Qty": n_qty,
-                                "Logo": n_logo,
-                                "Bottom Print": n_bot,
-                                "Box": n_box,
-                                "Remarks": n_rem,
-                                "Ready Qty": 0,
-                                "Status": "Pending"
-                            }])
-                            save_new_row(data, new_task, worksheet_name)
-                
-                inject_enter_key_navigation()
-
+        # 6. HISTORY
         st.divider()
         with st.expander("✅ View Completed History"):
             mask_complete = data["Status"] == "Complete"
             st.dataframe(data[mask_complete].drop(columns=["_original_idx", "_dt_obj"], errors="ignore"), use_container_width=True)
 
-        return # End Packing Logic
+        return # End Packing/Production Logic
 
     # ===============================================================
     # B. STORE TAB LOGIC
@@ -612,90 +654,6 @@ def manage_tab(tab_name, worksheet_name):
             st.info("ℹ️ Read-Only View (Admin Access)")
             st.dataframe(display_df.drop(columns=["_original_idx"], errors='ignore'), use_container_width=True)
         return
-
-    # ===============================================================
-    # D. STANDARD LOGIC (Production - FALLBACK)
-    # ===============================================================
-    
-    # Header & Refresh
-    c_title, c_ref = st.columns([8, 1])
-    with c_title: st.subheader(f"📂 {tab_name} Dashboard")
-    with c_ref:
-        if st.button("🔄", key=f"ref_{worksheet_name}"):
-            st.cache_data.clear()
-            st.rerun()
-
-    if "Ready Qty" not in data.columns: data["Ready Qty"] = 0
-    if "Status" not in data.columns: data["Status"] = "Pending"
-    
-    data["Status"] = data["Status"].fillna("Pending").replace("", "Pending")
-
-    # Filters
-    unique_items = sorted(data["Item Name"].astype(str).unique().tolist()) if "Item Name" in data.columns else []
-    
-    c1, c2 = st.columns([1, 2])
-    with c1: date_filter = st.selectbox("📅 Date Range", ["All", "Today", "Yesterday", "Prev 7 Days", "Prev 15 Days", "Prev 30 Days", "Prev All"], index=0, key=f"d_{worksheet_name}")
-    with c2: item_filter = st.multiselect("📦 Item Name", options=unique_items, key=f"i_{worksheet_name}")
-
-    filtered_data = filter_by_date(data, date_filter)
-    if item_filter: filtered_data = filtered_data[filtered_data["Item Name"].isin(item_filter)]
-
-    if not filtered_data.empty:
-        active_mask = filtered_data["Status"] != "Complete"
-        df_active = filtered_data[active_mask].copy()
-        df_comp = filtered_data[~active_mask].copy()
-    else:
-        df_active, df_comp = pd.DataFrame(), pd.DataFrame()
-
-    all_columns = [c for c in data.columns if c != "_original_idx"]
-    if st.session_state["role"] == "Admin": disabled_cols = ["_original_idx"]
-    else: disabled_cols = [c for c in all_columns if c not in ["Ready Qty", "Status"]] + ["_original_idx"]
-
-    st.write("### 🚀 Active Tasks")
-    edited_active = st.data_editor(
-        df_active,
-        disabled=disabled_cols,
-        column_config={"Status": st.column_config.SelectboxColumn("Status", options=["Pending", "Next Day", "Complete"], required=True), "_original_idx": None},
-        use_container_width=True,
-        num_rows="dynamic" if st.session_state["role"] == "Admin" else "fixed",
-        key=f"act_{worksheet_name}"
-    )
-
-    clean_active = df_active.drop(columns=["_original_idx"], errors='ignore')
-    clean_edited = edited_active.drop(columns=["_original_idx"], errors='ignore')
-
-    if not clean_active.equals(clean_edited):
-        if st.button(f"💾 Save {tab_name} Changes", key=f"sv_{worksheet_name}"):
-            save_smart_update(data, edited_active, worksheet_name)
-
-    st.divider()
-    with st.expander("✅ Completed History (Read Only)"):
-        st.dataframe(df_comp.drop(columns=["_original_idx"], errors='ignore'), use_container_width=True)
-
-    can_add_entry = st.session_state["role"] not in ["Production", "Packing"]
-    
-    if can_add_entry:
-        st.divider()
-        with st.expander(f"➕ Add New Entry"):
-            with st.form(f"fm_{worksheet_name}"):
-                c1, c2 = st.columns(2)
-                with c1:
-                    d = st.date_input("Date")
-                    i = st.text_input("Item")
-                with c2:
-                    q = st.number_input("Qty", min_value=0)
-                    n = st.text_input("Notes")
-                c3, c4 = st.columns(2)
-                with c3: rq = st.number_input("Ready Qty", value=0)
-                with c4: stt = st.selectbox("Status", ["Pending", "Next Day", "Complete"])
-
-                if st.form_submit_button("Submit"):
-                    if not i: st.warning("Item Required")
-                    else:
-                        nr = pd.DataFrame([{"Date": str(d), "Item": i, "Quantity": q, "Notes": n, "Ready Qty": rq, "Status": stt}])
-                        save_new_row(data, nr, worksheet_name)
-                
-                inject_enter_key_navigation()
 
 # ------------------------------------------------------------------
 # 8. APP ORCHESTRATION
