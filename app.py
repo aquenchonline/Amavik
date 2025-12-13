@@ -16,7 +16,7 @@ st.set_page_config(
     page_title="Amavik ERP", 
     layout="wide", 
     page_icon="🏭",
-    initial_sidebar_state="collapsed" # Collapsed by default for login view
+    initial_sidebar_state="collapsed" # Collapsed for login view
 )
 
 # ------------------------------------------------------------------
@@ -132,7 +132,7 @@ st.markdown("""
     /* TABLES & SEARCH BAR                     */
     /* ======================================= */
     
-    /* Custom Search Bar & Inputs */
+    /* Custom Search Bar */
     .stTextInput input {
         border-radius: 50px !important;
         border: 1px solid #DFE5EF;
@@ -155,6 +155,11 @@ st.markdown("""
         font-size: 0.8rem !important;
         padding: 0px 10px !important;
         box-shadow: none !important;
+    }
+    .pagination-btn button:hover {
+        background-color: #F4F7FE !important;
+        border-color: #5D87FF !important;
+        color: #5D87FF !important;
     }
 
     /* ======================================= */
@@ -223,6 +228,7 @@ st.markdown("""
             padding-bottom: 5px; 
             padding-left: 5px;
             scrollbar-width: none; 
+            -ms-overflow-style: none;
         }
         .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar { display: none; }
         
@@ -492,7 +498,6 @@ def render_styled_table(df, key_prefix, editable=False, decimal_format=None):
     for dc in date_cols:
         st_config[dc] = st.column_config.DateColumn(dc, format="YYYY-MM-DD")
     
-    # Store Tab Decimal Logic (Force 1 decimal max)
     if decimal_format:
         num_cols = df_page.select_dtypes(include=['float', 'int']).columns
         for nc in num_cols:
@@ -848,15 +853,22 @@ def manage_tab(tab_name, worksheet_name):
             render_edit_form(st.session_state["edit_idx"], data, worksheet_name, date_col)
             return
 
-        # 4 TABS LAYOUT
-        tab_create, tab_pending, tab_upcoming, tab_all = st.tabs(["➕ Create Task", "📌 Pending (Cards)", "📅 Upcoming", "🗂️ All Tasks"])
+        # ROLE BASED TABS
+        if st.session_state["role"] == "Admin":
+            tabs = st.tabs(["➕ Create Task", "📌 Pending (Cards)", "📅 Upcoming", "🗂️ All Tasks"])
+            t_create, t_pending, t_upcoming, t_all = tabs[0], tabs[1], tabs[2], tabs[3]
+        else:
+            tabs = st.tabs(["📌 Pending (Cards)", "📅 Upcoming"])
+            t_create, t_all = None, None
+            t_pending, t_upcoming = tabs[0], tabs[1]
 
         # 1. CREATE TASK
-        with tab_create:
-            render_add_task_form(data, worksheet_name)
+        if t_create:
+            with t_create:
+                render_add_task_form(data, worksheet_name)
 
         # 2. PENDING (CARDS)
-        with tab_pending:
+        with t_pending:
             all_pending = data[data["Status"] != "Complete"].copy().sort_values(by=[prio_col, "_dt_obj"], ascending=[True, True])
             
             backlog = all_pending[all_pending["_dt_obj"] < date.today()]
@@ -881,13 +893,14 @@ def manage_tab(tab_name, worksheet_name):
                 st.success("🎉 No pending tasks! All clear.")
 
         # 3. UPCOMING (TABLE)
-        with tab_upcoming:
+        with t_upcoming:
             upcoming_data = data[(data["_dt_obj"] > date.today()) & (data["Status"] != "Complete")].copy()
             render_styled_table(upcoming_data.drop(columns=["_original_idx", "_dt_obj"], errors='ignore'), f"upcoming_{worksheet_name}")
 
         # 4. ALL TASKS (TABLE)
-        with tab_all:
-            render_styled_table(data.drop(columns=["_original_idx", "_dt_obj"], errors='ignore'), f"all_{worksheet_name}")
+        if t_all:
+            with t_all:
+                render_styled_table(data.drop(columns=["_original_idx", "_dt_obj"], errors='ignore'), f"all_{worksheet_name}")
 
         return
 
@@ -925,7 +938,9 @@ def manage_tab(tab_name, worksheet_name):
             if not filtered_df.empty:
                 with st.expander("📊 Live Stock Analysis (Based on Current Search)", expanded=True):
                     df_calc = filtered_df.copy()
-                    df_calc["Qty"] = pd.to_numeric(df_calc["Qty"], errors="coerce").fillna(0)
+                    
+                    # Explicit Numeric Conversion
+                    df_calc["Qty"] = pd.to_numeric(df_calc["Qty"], errors="coerce").fillna(0).astype(float)
                     
                     stock_summary = df_calc.groupby("Item Name").apply(lambda x: pd.Series({
                         "Type": x["Type"].iloc[0] if not x["Type"].empty else "", 
@@ -941,7 +956,7 @@ def manage_tab(tab_name, worksheet_name):
                 if filtered_df.empty: df_display = pd.DataFrame(columns=data.columns).drop(columns=["_original_idx"], errors="ignore")
                 else: df_display = filtered_df.copy()
                 
-                if "Qty" in df_display.columns: df_display["Qty"] = pd.to_numeric(df_display["Qty"], errors='coerce').fillna(0).round(1)
+                if "Qty" in df_display.columns: df_display["Qty"] = pd.to_numeric(df_display["Qty"], errors='coerce').fillna(0).astype(float)
                 if "Date Of Entry" in df_display.columns: df_display["Date Of Entry"] = pd.to_datetime(df_display["Date Of Entry"], errors='coerce')
                 
                 edited_df = render_styled_table(df_display, "store_log", editable=True, decimal_format="%.1f")
@@ -990,7 +1005,10 @@ def manage_tab(tab_name, worksheet_name):
                 for c in [d_col, "Party Name", "Item Name", "Qty"]:
                     if c in plan_df.columns: cols.append(c)
                 
-                final_plan = plan_df[cols].copy()
+                # Remove duplicates from list if any
+                cols_to_show = list(dict.fromkeys(cols))
+                
+                final_plan = plan_df[cols_to_show].copy()
                 if "Qty" in final_plan.columns: 
                     final_plan["Qty"] = pd.to_numeric(final_plan["Qty"], errors='coerce').fillna(0).astype(float).round(1)
                 
