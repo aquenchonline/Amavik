@@ -16,7 +16,7 @@ st.set_page_config(
     page_title="Amavik ERP", 
     layout="wide", 
     page_icon="🏭",
-    initial_sidebar_state="collapsed" # Collapsed for login view
+    initial_sidebar_state="expanded"
 )
 
 # ------------------------------------------------------------------
@@ -102,7 +102,6 @@ st.markdown("""
     /* ======================================= */
     /* CARDS (White, Soft Shadow, Rounded)     */
     /* ======================================= */
-    /* Applies to st.container(border=True) */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background-color: #FFFFFF !important;
         border: none !important;
@@ -269,12 +268,13 @@ def inject_enter_key_navigation():
 # ------------------------------------------------------------------
 # 4. USER AUTHENTICATION
 # ------------------------------------------------------------------
+# ADDED DASHBOARD ACCESS TO ALL
 USERS = {
-    "Production": {"pass": "Amavik@80", "role": "Production", "access": ["Production"]},
-    "Packing":    {"pass": "Amavik@97", "role": "Packing",    "access": ["Packing"]},
-    "Store":      {"pass": "Amavik@17", "role": "Store",      "access": ["Store"]}, 
-    "Ecommerce":  {"pass": "Amavik@12", "role": "Ecommerce",  "access": ["Ecommerce", "Order"]},
-    "Amar":       {"pass": "Aquench@1933", "role": "Admin",   "access": ["Order", "Production", "Packing", "Store", "Ecommerce", "Configuration"]}
+    "Production": {"pass": "Amavik@80", "role": "Production", "access": ["Dashboard", "Production"]},
+    "Packing":    {"pass": "Amavik@97", "role": "Packing",    "access": ["Dashboard", "Packing"]},
+    "Store":      {"pass": "Amavik@17", "role": "Store",      "access": ["Dashboard", "Store"]}, 
+    "Ecommerce":  {"pass": "Amavik@12", "role": "Ecommerce",  "access": ["Dashboard", "Ecommerce", "Order"]},
+    "Amar":       {"pass": "Aquench@1933", "role": "Admin",   "access": ["Dashboard", "Order", "Production", "Packing", "Store", "Ecommerce", "Configuration"]}
 }
 
 # ------------------------------------------------------------------
@@ -416,7 +416,7 @@ def delete_task(original_data, index_to_delete, sheet_name):
     except Exception as e: st.error(f"Error deleting: {e}")
 
 # ------------------------------------------------------------------
-# 7. VISUALIZATION & TABLE HELPERS (NEW GRAPH LIBRARY)
+# 7. VISUALIZATION & TABLE HELPERS (PAGINATION ADDED)
 # ------------------------------------------------------------------
 def create_spline_chart(df, x_col, y_col, color_col=None):
     """Creates a Modern Spline Area Chart using Plotly GO"""
@@ -436,7 +436,6 @@ def create_spline_chart(df, x_col, y_col, color_col=None):
                 name=group,
                 line=dict(width=3, shape='spline', color=colors[i % len(colors)]),
                 fill='tozeroy',
-                # Create a semi-transparent color for the fill
                 fillcolor=f"rgba{tuple(list(int(colors[i%len(colors)][1:][j:j+2], 16) for j in (0, 2, 4)) + [0.1])}"
             ))
     else:
@@ -762,6 +761,82 @@ def render_add_task_form(data, worksheet_name):
 # 9. MAIN LOGIC: MANAGE TAB
 # ------------------------------------------------------------------
 def manage_tab(tab_name, worksheet_name):
+    # ===============================================================
+    # 0. DASHBOARD TAB (NEW)
+    # ===============================================================
+    if tab_name == "Dashboard":
+        st.subheader("📊 Amavik ERP Dashboard")
+        
+        # 1. KPIs (Ecommerce)
+        try:
+            eco_data = conn.read(spreadsheet=SHEET_URL, worksheet="Ecommerce", ttl=0)
+            if not eco_data.empty:
+                eco_data["Date"] = pd.to_datetime(eco_data["Date"], errors='coerce').dt.date
+                today = date.today()
+                
+                # Last 7 Days Filter
+                last_7 = eco_data[(eco_data["Date"] >= (today - timedelta(days=7))) & (eco_data["Date"] <= today)]
+                
+                t_orders = last_7["Today's Order"].sum()
+                t_dispatch = last_7["Today's Dispatch"].sum()
+                t_returns = last_7["Return"].sum()
+                
+                with st.container(border=True):
+                    k1, k2, k3 = st.columns(3)
+                    k1.metric("📦 7-Day Orders", int(t_orders))
+                    k2.metric("🚚 7-Day Dispatch", int(t_dispatch))
+                    k3.metric("↩️ 7-Day Returns", int(t_returns))
+                
+                # Charts
+                st.markdown("#### 📈 Weekly Trends")
+                c1, c2 = st.columns([2, 1])
+                with c1:
+                    fig_line = create_spline_chart(last_7, "Date", "Today's Order", "Channel Name")
+                    st.plotly_chart(fig_line, use_container_width=True)
+                with c2:
+                    channel_dist = last_7.groupby("Channel Name")["Today's Order"].sum().reset_index()
+                    fig_pie = create_donut_chart(channel_dist, "Today's Order", "Channel Name")
+                    st.plotly_chart(fig_pie, use_container_width=True)
+
+        except Exception as e:
+            st.error("Could not load Ecommerce data.")
+
+        st.divider()
+
+        # 2. Production Cards
+        st.markdown("#### 🏭 Production Queue")
+        try:
+            prod_data = conn.read(spreadsheet=SHEET_URL, worksheet="Production", ttl=0)
+            if not prod_data.empty:
+                prod_data["Status"] = prod_data["Status"].fillna("Pending")
+                pending_prod = prod_data[prod_data["Status"] != "Complete"]
+                if not pending_prod.empty:
+                    render_task_cards(pending_prod.head(4), "Date", st.session_state["role"], prod_data, "Production")
+                else:
+                    st.info("No pending production tasks.")
+        except:
+            st.info("Production data unavailable.")
+
+        st.divider()
+
+        # 3. Store Inventory Table
+        st.markdown("#### 📦 Store Inventory")
+        try:
+            store_data = conn.read(spreadsheet=SHEET_URL, worksheet="Store", ttl=0)
+            if not store_data.empty:
+                store_data["Qty"] = pd.to_numeric(store_data["Qty"], errors='coerce').fillna(0)
+                stock_sum = store_data.groupby("Item Name").apply(lambda x: pd.Series({
+                    "Type": x["Type"].iloc[0] if not x["Type"].empty else "", 
+                    "Balance": x[x["Transaction Type"] == "Inward"]["Qty"].sum() - x[x["Transaction Type"] == "Outward"]["Qty"].sum()
+                })).reset_index()
+                
+                render_styled_table(stock_summary=stock_sum, key_prefix="dash_store", decimal_format="%.1f")
+        except:
+            st.info("Store data unavailable.")
+        
+        return
+
+    # FOR OTHER TABS, LOAD SINGLE SHEET
     df_curr, df_display = pd.DataFrame(), pd.DataFrame()
     try:
         data = conn.read(spreadsheet=SHEET_URL, worksheet=worksheet_name, ttl=0)
@@ -776,10 +851,7 @@ def manage_tab(tab_name, worksheet_name):
     if worksheet_name == "Order":
         c_title, c_ref = st.columns([6, 1])
         with c_title: st.subheader("📑 Orders & Dispatch")
-        with c_ref:
-            if st.button("🔄", key="ref_order"):
-                st.cache_data.clear()
-                st.rerun()
+        # BUTTON REMOVED as requested (relying on global refresh)
 
         if "Item Name" not in data.columns: data["Item Name"] = ""
         if "Party Name" not in data.columns: data["Party Name"] = ""
@@ -1222,7 +1294,7 @@ else:
             st.cache_data.clear()
             st.rerun()
 
-    preferred = ["Order", "Production", "Packing", "Store", "Ecommerce", "Configuration"]
+    preferred = ["Dashboard", "Order", "Production", "Packing", "Store", "Ecommerce", "Configuration"]
     available_tabs = [t for t in preferred if t in st.session_state["access"]]
     
     if available_tabs:
