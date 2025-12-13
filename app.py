@@ -10,7 +10,7 @@ from datetime import date, timedelta, datetime
 # 1. PAGE CONFIGURATION
 # ------------------------------------------------------------------
 st.set_page_config(
-    page_title="ERP System", 
+    page_title="Amavik Operations", 
     layout="wide", 
     page_icon="🏭",
     initial_sidebar_state="collapsed"
@@ -91,7 +91,7 @@ if "logged_in" not in st.session_state:
 if "edit_idx" not in st.session_state:
     st.session_state["edit_idx"] = None 
 
-# 🔄 Permission Sync: Ensures Order tab appears even if already logged in
+# 🔄 Permission Sync
 if st.session_state["logged_in"] and st.session_state["user"] in USERS:
     st.session_state["access"] = USERS[st.session_state["user"]]["access"]
 
@@ -234,12 +234,16 @@ def render_edit_form(edit_idx, data, worksheet_name, date_col):
         if st.session_state["role"] == "Admin":
             with st.form(f"admin_{worksheet_name}_edit"):
                 c1, c2, c3 = st.columns(3)
-                with c1: new_date = st.date_input("Order Date", pd.to_datetime(row_data[date_col]).date())
-                with c1: new_party = st.text_input("Party Name", row_data.get('Party Name', ''))
-                with c2: new_item = st.text_input("Item Name", row_data.get('Item Name', ''))
-                with c2: new_qty = st.number_input("Target Qty", value=int(pd.to_numeric(row_data.get('Qty',0), errors='coerce')))
-                with c3: new_prio = st.number_input("Priority", value=int(pd.to_numeric(row_data.get('Order Priority',1), errors='coerce')))
-                with c3: new_box = st.text_input("Box", row_data.get('Box', ''))
+                with c1: 
+                    new_date = st.date_input("Order Date", pd.to_datetime(row_data[date_col]).date())
+                    new_party = st.text_input("Party Name", row_data.get('Party Name', ''))
+                with c2:
+                    new_item = st.text_input("Item Name", row_data.get('Item Name', ''))
+                    new_qty = st.number_input("Target Qty", value=int(pd.to_numeric(row_data.get('Qty',0), errors='coerce')))
+                with c3:
+                    new_prio = st.number_input("Priority", value=int(pd.to_numeric(row_data.get('Order Priority',1), errors='coerce')))
+                    new_box = st.text_input("Box", row_data.get('Box', ''))
+                
                 new_logo = row_data.get('Logo', '')
                 new_bot = row_data.get('Bottom Print', '')
                 if worksheet_name == "Packing":
@@ -399,11 +403,16 @@ def manage_tab(tab_name, worksheet_name):
                 st.cache_data.clear()
                 st.rerun()
         
+        # --- FIX FOR KEYERROR: Create Columns if Missing ---
         if "Party Name" not in data.columns: data["Party Name"] = ""
+        if "Order Priority" not in data.columns: data["Order Priority"] = 999
+        
         data["Status"] = data["Status"].fillna("Pending").replace("", "Pending")
         date_col = "Order Date" if "Order Date" in data.columns else "Date"
         data["_dt_obj"] = pd.to_datetime(data[date_col], errors='coerce').dt.date
-        if "Order Priority" in data.columns: data["Order Priority"] = pd.to_numeric(data["Order Priority"], errors='coerce').fillna(999)
+        
+        # Ensure Priority is Number
+        data["Order Priority"] = pd.to_numeric(data["Order Priority"], errors='coerce').fillna(999)
 
         all_pending = data[data["Status"] != "Complete"].copy()
         today = date.today()
