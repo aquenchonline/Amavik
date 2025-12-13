@@ -6,6 +6,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import time
 from datetime import date, timedelta, datetime
+import math
 
 # ------------------------------------------------------------------
 # 1. PAGE CONFIGURATION
@@ -18,35 +19,30 @@ st.set_page_config(
 )
 
 # ------------------------------------------------------------------
-# 2. UI/UX STYLING (GXON Analytics + AdminUX Theme)
+# 2. UI/UX STYLING (GXON Analytics + Pagination)
 # ------------------------------------------------------------------
 st.markdown("""
 <style>
     /* IMPORT FONTS */
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 
-    /* GLOBAL RESET & FONTS */
     html, body, [class*="css"] {
         font-family: 'Plus Jakarta Sans', sans-serif;
         color: #2a3547;
     }
 
-    /* APP BACKGROUND */
     .stApp {
-        background-color: #F4F7FE; /* GXON Light Dashboard BG */
+        background-color: #F4F7FE; 
     }
 
-    /* ======================================= */
-    /* SIDEBAR STYLING (Light/Dark/Orange/Blue) */
-    /* ======================================= */
+    /* SIDEBAR */
     section[data-testid="stSidebar"] {
         background-color: #FFFFFF;
         border-right: 1px solid #EAEFF4;
     }
     
-    /* Sidebar Text */
     section[data-testid="stSidebar"] * {
-        color: #111C43 !important; /* Dark Navy Text */
+        color: #111C43 !important; 
     }
 
     /* NAV BUTTONS */
@@ -61,14 +57,12 @@ st.markdown("""
         transition: all 0.2s ease-in-out;
     }
 
-    /* HOVER: Deep Blue */
     div[data-testid="stSidebar"] div.stRadio > div[role="radiogroup"] > label:hover {
         background-color: #111C43 !important;
         color: #FFFFFF !important;
         border-color: #111C43;
     }
 
-    /* ACTIVE: Orange */
     div[data-testid="stSidebar"] div.stRadio > div[role="radiogroup"] > label[data-checked="true"] {
         background-color: #FF8C00 !important; /* Orange */
         color: white !important;
@@ -77,25 +71,20 @@ st.markdown("""
         box-shadow: 0 4px 10px rgba(255, 140, 0, 0.25);
     }
     
-    /* Hide Radio Circles */
     div[data-testid="stSidebar"] div.stRadio div[role="radiogroup"] label div:first-child {
         display: none !important;
     }
 
-    /* ======================================= */
-    /* CARDS (White, Soft Shadow, Rounded)     */
-    /* ======================================= */
+    /* CARDS */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background-color: #FFFFFF !important;
         border: none !important;
         border-radius: 12px !important;
-        /* Exact shadow from reference */
         box-shadow: 0px 9px 20px rgba(46, 35, 94, 0.07) !important;
         padding: 24px !important;
         margin-bottom: 20px;
     }
 
-    /* Prevent double shadow on nested cards */
     div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stVerticalBlockBorderWrapper"] {
         box-shadow: none !important;
         background-color: #F9F9FC !important;
@@ -111,37 +100,60 @@ st.markdown("""
     div[data-testid="stMetricLabel"] { font-size: 0.85rem; color: #7C8FAC; }
     div[data-testid="stMetricValue"] { font-size: 1.8rem; color: #2A3547; font-weight: 700; }
 
-    /* ======================================= */
-    /* FORMS & INPUTS (Modern Layout)          */
-    /* ======================================= */
-    
-    /* Custom Search Bar & Inputs */
-    .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"] {
-        border-radius: 8px !important;
+    /* SEARCH BAR */
+    .stTextInput input {
+        border-radius: 50px !important;
         border: 1px solid #DFE5EF;
+        padding: 8px 20px;
+        font-size: 0.9rem;
         background-color: #fff;
-        color: #5A6A85;
     }
-    
-    .stTextInput input:focus, .stNumberInput input:focus {
+    .stTextInput input:focus {
         border-color: #5D87FF;
         box-shadow: 0 0 0 3px rgba(93, 135, 255, 0.1);
     }
 
-    /* Expander Styling (For Forms) */
-    .streamlit-expanderHeader {
-        background-color: #FFFFFF;
-        border: 1px solid #EAEFF4;
-        border-radius: 8px;
-        color: #2A3547;
-        font-weight: 600;
+    /* PAGINATION BUTTONS */
+    .pagination-btn button {
+        background-color: #ffffff !important;
+        color: #5A6A85 !important;
+        border: 1px solid #DFE5EF !important;
+        border-radius: 6px !important;
+        height: 2em !important;
+        font-size: 0.8rem !important;
+        padding: 0px 10px !important;
+        box-shadow: none !important;
+    }
+    .pagination-btn button:hover {
+        background-color: #F4F7FE !important;
+        border-color: #5D87FF !important;
+        color: #5D87FF !important;
+    }
+    
+    /* Disabled State */
+    .pagination-btn button:disabled {
+        background-color: #f1f1f1 !important;
+        color: #ccc !important;
+        border-color: #eee !important;
     }
 
-    /* ======================================= */
-    /* COMPONENTS                              */
-    /* ======================================= */
+    /* MAIN BUTTONS */
+    .stButton button {
+        background-color: #5D87FF;
+        color: white;
+        border-radius: 8px;
+        font-weight: 600;
+        border: none;
+        height: 2.6em;
+        box-shadow: 0 4px 14px 0 rgba(93, 135, 255, 0.39);
+        transition: 0.2s;
+    }
+    .stButton button:hover {
+        background-color: #4570EA;
+        color: white;
+    }
 
-    /* Tabs */
+    /* TABS */
     .stTabs [data-baseweb="tab-list"] {
         gap: 20px;
         border-bottom: 1px solid #EAEFF4;
@@ -167,36 +179,11 @@ st.markdown("""
         box-shadow: none !important;
     }
 
-    /* Buttons */
-    .stButton button {
-        background-color: #5D87FF;
-        color: white;
-        border-radius: 8px;
-        font-weight: 600;
-        border: none;
-        height: 2.6em;
-        box-shadow: 0 4px 14px 0 rgba(93, 135, 255, 0.39);
-        transition: 0.2s;
-    }
-    .stButton button:hover {
-        background-color: #4570EA;
-        color: white;
-    }
-
-    /* Headings */
     h1, h2, h3, h4 { color: #2A3547 !important; font-weight: 700; }
     
-    /* MOBILE OPTIMIZATIONS */
     @media (max-width: 768px) {
-        div[data-testid="column"] {
-            width: 50% !important;
-            flex: 0 0 50% !important;
-            min-width: 50% !important;
-        }
-        .stTabs [data-baseweb="tab"] {
-            font-size: 0.75rem;
-            padding: 5px 10px;
-        }
+        div[data-testid="column"] { width: 50% !important; flex: 0 0 50% !important; min-width: 50% !important; }
+        .stTabs [data-baseweb="tab"] { font-size: 0.75rem; padding: 5px 10px; }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -250,6 +237,7 @@ if st.session_state["logged_in"] and st.session_state["user"] in USERS:
 
 def login():
     st.title("🔒 Amavik ERP")
+    st.markdown("### Sign In")
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
         username = st.text_input("User ID")
@@ -359,7 +347,7 @@ def delete_task(original_data, index_to_delete, sheet_name):
     except Exception as e: st.error(f"Error deleting: {e}")
 
 # ------------------------------------------------------------------
-# 7. VISUALIZATION HELPERS (GXON STYLE)
+# 7. VISUALIZATION & TABLE HELPERS (PAGINATION ADDED)
 # ------------------------------------------------------------------
 def style_plotly_chart(fig):
     """Applies the GXON Spline & Gradient Style to Charts"""
@@ -369,21 +357,13 @@ def style_plotly_chart(fig):
         font_family="Plus Jakarta Sans",
         font_color="#2A3547",
         title_font_size=16,
-        margin=dict(l=20, r=20, t=40, b=50), # More bottom margin for legend
+        margin=dict(l=20, r=20, t=40, b=50),
         xaxis=dict(showgrid=False, zeroline=False),
         yaxis=dict(showgrid=True, gridcolor='#EAEFF4', zeroline=False),
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=-0.2,
-            xanchor="center",
-            x=0.5
-        )
+        legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5)
     )
-    # Add Gradient Fill if line chart
     if hasattr(fig, 'data') and len(fig.data) > 0 and fig.data[0].type == 'scatter':
          fig.update_traces(fill='tozeroy', mode='lines+markers', line=dict(width=3))
-    
     return fig
 
 def color_status(val):
@@ -399,46 +379,77 @@ def color_status(val):
     return ''
 
 def render_styled_table(df, key_prefix, editable=False):
-    """Renders a dataframe looking like the 'Recent Orders' reference"""
+    """
+    Renders a dataframe with Pagination (10 rows/page) and Search.
+    Matches the 'Recent Orders' reference style.
+    """
     if df.empty:
         st.info("No data available.")
         return None
 
-    # Header with Search
+    # --- 1. SEARCH & FILTER ---
     c_title, c_search = st.columns([3, 1])
     with c_title: st.markdown("##### 📋 Entries")
     with c_search: 
-        search = st.text_input("Search", placeholder="Search...", key=f"search_{key_prefix}", label_visibility="collapsed")
+        search_query = st.text_input("Search", placeholder="Search...", key=f"search_{key_prefix}", label_visibility="collapsed")
 
-    # Filter
-    df_show = df.copy()
-    if search:
-        mask = df_show.astype(str).apply(lambda x: x.str.contains(search, case=False, na=False)).any(axis=1)
-        df_show = df_show[mask]
+    df_filtered = df.copy()
+    if search_query:
+        mask = df_filtered.astype(str).apply(lambda x: x.str.contains(search_query, case=False, na=False)).any(axis=1)
+        df_filtered = df_filtered[mask]
+        # Reset pagination on search
+        if f"page_{key_prefix}" in st.session_state:
+             st.session_state[f"page_{key_prefix}"] = 0
 
-    # Column Config
+    if df_filtered.empty:
+        st.warning("No matching records found.")
+        return None
+
+    # --- 2. PAGINATION LOGIC ---
+    ITEMS_PER_PAGE = 10
+    total_rows = len(df_filtered)
+    total_pages = max(1, math.ceil(total_rows / ITEMS_PER_PAGE))
+    
+    # Initialize Page State
+    if f"page_{key_prefix}" not in st.session_state:
+        st.session_state[f"page_{key_prefix}"] = 0
+    
+    # Ensure current page is valid (e.g. after deletion)
+    if st.session_state[f"page_{key_prefix}"] >= total_pages:
+        st.session_state[f"page_{key_prefix}"] = max(0, total_pages - 1)
+        
+    current_page = st.session_state[f"page_{key_prefix}"]
+    
+    # Slice Data
+    start_idx = current_page * ITEMS_PER_PAGE
+    end_idx = start_idx + ITEMS_PER_PAGE
+    df_page = df_filtered.iloc[start_idx:end_idx]
+
+    # --- 3. COLUMN CONFIGURATION ---
     st_config = {}
+    status_col = next((c for c in df_page.columns if "Status" in c), None)
     
-    # Auto-detect Status column
-    status_col = next((c for c in df_show.columns if "Status" in c), None)
-    
-    # Auto-detect Date columns
-    date_cols = [c for c in df_show.columns if "Date" in c]
+    # Date Format
+    date_cols = [c for c in df_page.columns if "Date" in c]
     for dc in date_cols:
         st_config[dc] = st.column_config.DateColumn(dc, format="YYYY-MM-DD")
+    
+    # Number Formats (Default to 2 decimal if float, int if int)
+    # Note: Streamlit usually auto-detects, but we can force specifics if needed
 
+    # --- 4. RENDER TABLE ---
+    result = None
     if not editable:
-        # Apply Pandas Styling for Pills
-        styled_df = df_show.style.map(color_status, subset=[status_col] if status_col else [])
+        # Apply Status Pills via Pandas Styler
+        styled_df = df_page.style.map(color_status, subset=[status_col] if status_col else [])
         st.dataframe(
             styled_df,
             use_container_width=True,
             column_config=st_config,
-            hide_index=True # Match reference
+            hide_index=True 
         )
-        return None
     else:
-        # If Editable, standard editor but clean
+        # Editable Editor
         if status_col:
             st_config[status_col] = st.column_config.SelectboxColumn(
                 "Status",
@@ -446,17 +457,51 @@ def render_styled_table(df, key_prefix, editable=False):
                 required=True,
                 width="medium"
             )
-            
-        edited = st.data_editor(
-            df_show,
+        
+        result = st.data_editor(
+            df_page,
             use_container_width=True,
             column_config=st_config,
             num_rows="fixed",
-            key=f"editor_{key_prefix}",
+            key=f"editor_{key_prefix}_{current_page}", # Unique key per page to avoid stale data
             hide_index=True,
             disabled=["_original_idx"]
         )
-        return edited
+
+    # --- 5. PAGINATION CONTROLS (Footer) ---
+    st.markdown("---")
+    c_info, c_prev, c_page, c_next = st.columns([6, 1, 2, 1])
+    
+    with c_info:
+        st.caption(f"Showing {start_idx + 1} to {min(end_idx, total_rows)} of {total_rows} entries")
+    
+    with c_prev:
+        # Custom CSS class for styling buttons small
+        if st.button("Previous", key=f"prev_{key_prefix}", disabled=(current_page == 0)):
+            st.session_state[f"page_{key_prefix}"] -= 1
+            st.rerun()
+            
+    with c_page:
+        st.markdown(f"<div style='text-align:center; padding-top:5px; font-weight:500; color:#5A6A85;'>Page {current_page + 1} of {total_pages}</div>", unsafe_allow_html=True)
+        
+    with c_next:
+        if st.button("Next", key=f"next_{key_prefix}", disabled=(current_page >= total_pages - 1)):
+            st.session_state[f"page_{key_prefix}"] += 1
+            st.rerun()
+
+    # Wrap buttons in custom class
+    st.markdown("""
+    <script>
+        var buttons = window.parent.document.querySelectorAll('button[kind="secondary"]');
+        buttons.forEach(btn => {
+            if(btn.innerText === "Previous" || btn.innerText === "Next") {
+                btn.classList.add("pagination-btn");
+            }
+        });
+    </script>
+    """, unsafe_allow_html=True)
+
+    return result
 
 # ------------------------------------------------------------------
 # 8. COMPONENT LOGIC
@@ -469,7 +514,7 @@ def render_task_cards(df_display, date_col, role_name, data, worksheet_name):
             prio = smart_format(row.get('Priority') if worksheet_name == "Production" else row.get('Order Priority')) or 999
             emoji_prio = "🔴" if prio == 1 else "🟡" if prio == 2 else "🟢"
             
-            with st.container(border=True): # White Card
+            with st.container(border=True):
                 c_head, c_del = st.columns([5, 1])
                 with c_head:
                     st.caption(f"{emoji_prio} Priority {prio} | {row.get(date_col, '-')}")
@@ -495,13 +540,15 @@ def render_task_cards(df_display, date_col, role_name, data, worksheet_name):
                     if details:
                         st.markdown(f"<div style='background-color:#F4F7FE; padding:6px 10px; border-radius:6px; font-size:0.75rem; color:#5D87FF; font-weight:600; text-align:center; margin-top:10px;'>{' | '.join(details)}</div>", unsafe_allow_html=True)
                 else: 
-                    st.markdown(f"#### {row.get('Item Name', '')}")
+                    st.markdown(f"### **{row.get('Item Name', '')}**")
                     qty_val = smart_format(row.get('Quantity'))
                     ready_val = smart_format(row.get('Ready Qty'))
-                    st.markdown(f"<div style='display:flex; justify-content:space-between; margin-top:10px;'><div><small>Target</small><h5>{qty_val}</h5></div><div><small>Ready</small><h5>{ready_val}</h5></div></div>", unsafe_allow_html=True)
+                    c1, c2 = st.columns(2)
+                    with c1: st.write(f"**Target:** {qty_val}")
+                    with c2: st.write(f"**Ready:** {ready_val}")
                     
                     rem_key = "Notes"
-                    if row.get(rem_key): st.info(f"{row[rem_key]}")
+                    if row.get(rem_key): st.info(f"{row[rem_key]}", icon="📝")
 
                 btn_label = "✏️ Edit" if st.session_state["role"] == "Admin" else "✅ Update"
                 if st.button(btn_label, key=f"btn_{worksheet_name}_{index}", use_container_width=True):
@@ -570,6 +617,7 @@ def render_edit_form(edit_idx, data, worksheet_name, date_col):
                 st.rerun()
 
 def render_add_task_form(data, worksheet_name):
+    st.divider()
     with st.expander(f"➕ Assign New {worksheet_name} Task", expanded=False):
         with st.form(f"new_{worksheet_name}_task"):
             if worksheet_name == "Production":
@@ -589,17 +637,19 @@ def render_add_task_form(data, worksheet_name):
                         save_new_row(data, new_task, worksheet_name)
             else:
                 c1, c2, c3 = st.columns(3)
-                with c1: n_date = st.date_input("Order Date")
-                with c2: n_party = st.text_input("Party Name")
-                with c3: n_logo = st.selectbox("Logo", ["W/O Logo", "Laser", "Pad"])
-                c4, c5 = st.columns(2)
-                with c4: n_item = st.text_input("Item Name")
-                with c5: n_qty = st.number_input("Order Qty", min_value=1.0, step=0.01)
-                c6, c7 = st.columns(2)
-                with c6: n_bot = st.selectbox("Bottom Print", ["No", "Laser", "Pad"])
-                with c7: n_prio = st.number_input("Priority", min_value=1, value=1)
-                n_box = st.selectbox("Box", ["Loose", "Brown Box", "White Box", "Box"])
-                n_rem = st.text_input("Remarks")
+                with c1: 
+                    n_date = st.date_input("Order Date")
+                    n_party = st.text_input("Party Name")
+                    n_logo = st.selectbox("Logo", ["W/O Logo", "Laser", "Pad"])
+                with c2:
+                    n_item = st.text_input("Item Name")
+                    n_qty = st.number_input("Order Qty", min_value=1.0, step=0.01)
+                    n_bot = st.selectbox("Bottom Print", ["No", "Laser", "Pad"])
+                with c3:
+                    n_prio = st.number_input("Priority", min_value=1, value=1)
+                    n_box = st.selectbox("Box", ["Loose", "Brown Box", "White Box", "Box"])
+                    n_rem = st.text_input("Remarks")
+                
                 if st.form_submit_button("🚀 Assign"):
                     if not n_item: st.warning("Item Name Required")
                     else:
@@ -675,32 +725,25 @@ def manage_tab(tab_name, worksheet_name):
             c_view, c_search = st.columns([1, 2])
             with c_view:
                 view_mode = st.radio("📊 View Mode", ["Party-wise Summary", "Item-wise Summary", "Matrix View"], horizontal=True, label_visibility="collapsed")
-            with c_search:
-                search_q = st.text_input("🔍 Search Filter", placeholder="Filter...", label_visibility="collapsed")
 
             if not data.empty:
                 df_sum = data.copy()
-                if search_q:
-                    mask = (df_sum['Item Name'].astype(str).str.contains(search_q, case=False, na=False) | df_sum['Party Name'].astype(str).str.contains(search_q, case=False, na=False))
-                    df_sum = df_sum[mask]
+                base_pivot = df_sum.pivot_table(index=['Party Name', 'Item Name'], columns='Transaction Type', values='Qty', aggfunc='sum', fill_value=0).reset_index()
+                if "Order Received" not in base_pivot.columns: base_pivot["Order Received"] = 0
+                if "Dispatch" not in base_pivot.columns: base_pivot["Dispatch"] = 0
+                base_pivot["Pending Balance"] = base_pivot["Order Received"] - base_pivot["Dispatch"]
+                
+                base_pivot = base_pivot.round(2)
+                cols_to_int = ["Order Received", "Dispatch", "Pending Balance"]
+                for c in cols_to_int: base_pivot[c] = base_pivot[c].astype(int)
 
-                if not df_sum.empty:
-                    base_pivot = df_sum.pivot_table(index=['Party Name', 'Item Name'], columns='Transaction Type', values='Qty', aggfunc='sum', fill_value=0).reset_index()
-                    if "Order Received" not in base_pivot.columns: base_pivot["Order Received"] = 0
-                    if "Dispatch" not in base_pivot.columns: base_pivot["Dispatch"] = 0
-                    base_pivot["Pending Balance"] = base_pivot["Order Received"] - base_pivot["Dispatch"]
-                    base_pivot = base_pivot.round(2)
-                    cols_to_int = ["Order Received", "Dispatch", "Pending Balance"]
-                    for c in cols_to_int: base_pivot[c] = base_pivot[c].astype(int)
-
-                    if view_mode == "Matrix View":
-                        matrix = base_pivot.pivot_table(index="Item Name", columns="Party Name", values="Pending Balance", aggfunc="sum", fill_value=0, margins=True, margins_name="Total")
-                        st.dataframe(matrix.style.highlight_between(left=1, right=1000000, color="#ffcdd2"), use_container_width=True)
-                    elif view_mode == "Party-wise Summary":
-                        render_styled_table(base_pivot.sort_values(by="Party Name"), "summ_party")
-                    else:
-                        render_styled_table(base_pivot.sort_values(by="Item Name"), "summ_item")
-                else: st.warning("No data matches your search.")
+                if view_mode == "Matrix View":
+                    matrix = base_pivot.pivot_table(index="Item Name", columns="Party Name", values="Pending Balance", aggfunc="sum", fill_value=0, margins=True, margins_name="Total")
+                    st.dataframe(matrix.style.highlight_between(left=1, right=1000000, color="#ffcdd2"), use_container_width=True)
+                elif view_mode == "Party-wise Summary":
+                    render_styled_table(base_pivot.sort_values(by="Party Name"), "summ_party")
+                else:
+                    render_styled_table(base_pivot.sort_values(by="Item Name"), "summ_item")
             else: st.info("No Order data available.")
         return 
 
@@ -769,23 +812,15 @@ def manage_tab(tab_name, worksheet_name):
         with tab_inv:
             c1, c2 = st.columns([1, 3])
             with c1: d_filter = st.selectbox("📅 Date Filter", ["All", "Today", "Yesterday", "Prev 7 Days", "This Month"], key="st_date")
-            with c2: search_query = st.text_input("🔍 Universal Search (Item, Party, Type, Inv No.)", placeholder="Type at least 3 digits to search...")
+            with c2: search_query = st.text_input("🔍 Universal Search", placeholder="Item...", label_visibility="collapsed")
 
             filtered_df = filter_by_date(data, d_filter, date_col_name="Date Of Entry")
             if search_query and len(search_query) >= 3:
                 mask = (
                     filtered_df['Item Name'].astype(str).str.contains(search_query, case=False, na=False) |
-                    filtered_df['Recvd From'].astype(str).str.contains(search_query, case=False, na=False) |
-                    filtered_df['Type'].astype(str).str.contains(search_query, case=False, na=False) |
-                    filtered_df['Transaction Type'].astype(str).str.contains(search_query, case=False, na=False) |
-                    filtered_df['Invoice No.'].astype(str).str.contains(search_query, case=False, na=False)
+                    filtered_df['Recvd From'].astype(str).str.contains(search_query, case=False, na=False)
                 )
                 filtered_df = filtered_df[mask]
-                found_items = filtered_df['Item Name'].unique().tolist()
-                if found_items: st.caption(f"💡 **Top Suggestions:** {', '.join(found_items[:5])}")
-                else: st.warning("No matching items found.")
-
-            st.divider()
 
             if not filtered_df.empty:
                 with st.expander("📊 Live Stock Analysis (Based on Current Search)", expanded=True):
@@ -809,24 +844,23 @@ def manage_tab(tab_name, worksheet_name):
                     if not clean_view.equals(clean_edited):
                         if st.button("💾 Save Changes", key="save_store"): save_smart_update(data, edited_df, worksheet_name)
 
-                st.divider()
-                with st.expander("➕ Update Stock (Add New Entry)", expanded=True):
+                with st.expander("➕ Update Stock"):
                     with st.form("store_form"):
                         c1, c2, c3 = st.columns(3)
                         with c1: date_ent = st.date_input("Date Of Entry", value=date.today())
-                        with c2: trans_type = st.selectbox("Transaction Type", ["Inward", "Outward"])
-                        with c3: qty = st.number_input("Quantity", min_value=1.0, step=0.01)
+                        with c2: trans_type = st.selectbox("Type", ["Inward", "Outward"])
+                        with c3: qty = st.number_input("Qty", min_value=1.0, step=0.01)
                         c4, c5, c6 = st.columns(3)
-                        with c4: item_name = st.text_input("Item Name")
+                        with c4: item_name = st.text_input("Item")
                         with c5: uom = st.selectbox("UOM", ["Pcs", "Boxes", "Kg", "Ltr", "Set", "Packet"])
                         with c6: i_type = st.selectbox("Type", ["Inner Box", "Outer Box", "Washer", "String", "Cap", "Bubble", "Bottle", "Other"])
                         c7, c8, c9 = st.columns(3)
-                        with c7: recvd_from = st.text_input("Recvd From / Sent To")
-                        with c8: vendor_brand = st.text_input("Vendor Name (Brand)")
-                        with c9: invoice_no = st.text_input("Invoice No. (Inward Only)")
+                        with c7: recvd_from = st.text_input("Recvd From")
+                        with c8: vendor_brand = st.text_input("Brand")
+                        with c9: invoice_no = st.text_input("Inv No.")
 
-                        if st.form_submit_button("Submit Transaction"):
-                            if not item_name: st.warning("⚠️ Item Name is required!")
+                        if st.form_submit_button("Submit"):
+                            if not item_name: st.warning("Req: Item")
                             else:
                                 new_entry = pd.DataFrame([{"Date Of Entry": str(date_ent), "Recvd From": recvd_from, "Vendor Name(Brand)": vendor_brand, "Type": i_type, "Item Name": item_name, "Qty": qty, "UOM": uom, "Transaction Type": trans_type, "Invoice No.": invoice_no}])
                                 save_new_row(data, new_entry, worksheet_name)
