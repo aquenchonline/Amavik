@@ -92,7 +92,7 @@ st.markdown("""
 
         .stTabs [data-baseweb="tab"] {
             flex: 0 0 auto !important;      
-            width: 31% !important;          /* 👈 CHANGED: 3 tabs visible (3x31% ~ 93%) */
+            width: 31% !important;          /* 3 tabs visible */
             font-size: 0.7rem !important;
             padding: 4px 2px !important;
             height: 35px !important;
@@ -478,20 +478,20 @@ def manage_tab(tab_name, worksheet_name):
     # A. ORDER TAB
     # ===============================================================
     if worksheet_name == "Order":
-        c_title, c_ref = st.columns([8, 1])
-        with c_title: st.subheader("📑 Orders & Dispatch Management")
-        with c_ref:
+        col_header, col_btn = st.columns([6, 1])
+        with col_header: st.subheader("📑 Orders & Dispatch")
+        with col_btn:
+            st.write("")
+            st.write("")
             if st.button("🔄", key="ref_order"):
                 st.cache_data.clear()
                 st.rerun()
 
-        # 🚀 FIX: Ensure required columns exist
         if "Item Name" not in data.columns: data["Item Name"] = ""
         if "Party Name" not in data.columns: data["Party Name"] = ""
         if "Qty" not in data.columns: data["Qty"] = 0
         if "Transaction Type" not in data.columns: data["Transaction Type"] = "Order Received"
 
-        # 🚀 RENAMED TABS
         tab_log, tab_summ = st.tabs(["Order", "Summary"])
         
         with tab_log:
@@ -517,12 +517,10 @@ def manage_tab(tab_name, worksheet_name):
             st.divider()
             st.write("### 🗂️ Transaction History")
             if not data.empty:
-                # Use float for decimals
                 if "Qty" in data.columns: 
                     data["Qty"] = pd.to_numeric(data["Qty"], errors='coerce').fillna(0)
                 if "Date" in data.columns: data["Date"] = pd.to_datetime(data["Date"], errors='coerce')
                 
-                # Show rounded in editor
                 edited_df = st.data_editor(
                     data, 
                     use_container_width=True, 
@@ -562,7 +560,6 @@ def manage_tab(tab_name, worksheet_name):
                     if "Dispatch" not in base_pivot.columns: base_pivot["Dispatch"] = 0
                     base_pivot["Pending Balance"] = base_pivot["Order Received"] - base_pivot["Dispatch"]
                     
-                    # Round for display
                     base_pivot = base_pivot.round(2)
 
                     if view_mode == "Matrix View (Item vs Party)":
@@ -581,12 +578,7 @@ def manage_tab(tab_name, worksheet_name):
     # B. PRODUCTION & PACKING
     # ===============================================================
     if worksheet_name in ["Packing", "Production"]:
-        c_title, c_ref = st.columns([8, 1])
-        with c_title: st.subheader(f"📦 {worksheet_name} Tasks")
-        with c_ref:
-            if st.button("🔄", key=f"ref_{worksheet_name}"):
-                st.cache_data.clear()
-                st.rerun()
+        st.subheader(f"📦 {worksheet_name} Tasks")
         
         if "Status" not in data.columns: data["Status"] = "Pending"
         data["Status"] = data["Status"].fillna("Pending").replace("", "Pending")
@@ -653,12 +645,7 @@ def manage_tab(tab_name, worksheet_name):
     # C. STORE TAB LOGIC
     # ===============================================================
     if worksheet_name == "Store":
-        c_title, c_ref = st.columns([8, 1])
-        with c_title: st.subheader("📦 Store Management")
-        with c_ref:
-            if st.button("🔄", key="ref_store"):
-                st.cache_data.clear()
-                st.rerun()
+        st.subheader("📦 Store Management")
 
         if "Item Name" not in data.columns: data["Item Name"] = ""
         if "Qty" not in data.columns: data["Qty"] = 0
@@ -710,7 +697,6 @@ def manage_tab(tab_name, worksheet_name):
                     
                     df_sum_res = pd.DataFrame(stock_summary)
                     if not df_sum_res.empty:
-                        # Apply smart rounding to the summary dataframe
                         df_sum_res = df_sum_res.round(2)
                         st.dataframe(df_sum_res.style.highlight_between(left=0.01, right=1000000, subset=["Net Change"], color="#ffcdd2"), use_container_width=True, column_config={"Net Change": st.column_config.NumberColumn("Net Balance")})
 
@@ -722,7 +708,6 @@ def manage_tab(tab_name, worksheet_name):
                 if "Qty" in df_display.columns: df_display["Qty"] = pd.to_numeric(df_display["Qty"], errors='coerce').fillna(0)
                 if "Date Of Entry" in df_display.columns: df_display["Date Of Entry"] = pd.to_datetime(df_display["Date Of Entry"], errors='coerce')
 
-                # Removed format="%d" to allow decimals
                 edited_df = st.data_editor(df_display, use_container_width=True, num_rows="fixed", key="store_editor", disabled=["_original_idx"], column_config={"Qty": st.column_config.NumberColumn("Qty"), "Date Of Entry": st.column_config.DateColumn("Date Of Entry", format="YYYY-MM-DD")})
 
                 clean_view = df_display.drop(columns=["_original_idx"], errors='ignore')
@@ -800,22 +785,34 @@ if not st.session_state["logged_in"]:
     login()
 else:
     with st.sidebar:
+        # User Profile Header
         st.write(f"👤 **{st.session_state['user']}**")
         st.caption(f"Role: {st.session_state['role']}")
         if st.button("Logout", use_container_width=True): logout()
 
-    st.title("🏭 Amavik ERP")
-    
-    # Sort order
+    # GLOBAL HEADER & REFRESH (Top Right)
+    col_header, col_btn = st.columns([6, 1])
+    with col_header:
+        st.title("🏭 Amavik ERP")
+    with col_btn:
+        st.write("") 
+        st.write("") 
+        if st.button("🔄", key="global_refresh", help="Refresh Data"):
+            st.cache_data.clear()
+            st.rerun()
+
+    # TABS NAVIGATION
     preferred = ["Order", "Production", "Packing", "Store", "Ecommerce", "Configuration"]
     available_tabs = [t for t in preferred if t in st.session_state["access"]]
     
-    tabs = st.tabs(available_tabs)
-    
-    for tab, title in zip(tabs, available_tabs):
-        with tab:
-            if title == "Configuration":
-                st.header("⚙️ System Configuration")
-                st.info("Only Admin can access this area.")
-            else:
-                manage_tab(title, title)
+    if available_tabs:
+        tabs = st.tabs(available_tabs)
+        for tab, title in zip(tabs, available_tabs):
+            with tab:
+                if title == "Configuration":
+                    st.header("⚙️ System Configuration")
+                    st.info("Only Admin can access this area.")
+                else:
+                    manage_tab(title, title)
+    else:
+        st.error("No modules assigned to your role.")
