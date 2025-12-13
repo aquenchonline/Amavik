@@ -17,7 +17,7 @@ st.set_page_config(
 )
 
 # ------------------------------------------------------------------
-# 2. UI/UX STYLING (Restored Light Sidebar + White Cards)
+# 2. UI/UX STYLING (Light Sidebar + White Cards)
 # ------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -34,15 +34,13 @@ st.markdown("""
         background-color: #F3F6FD; /* Light Blue-Gray Background */
     }
     
-    /* ======================================= */
-    /* SIDEBAR STYLING (LIGHT THEME RESTORED)  */
-    /* ======================================= */
+    /* SIDEBAR STYLING */
     section[data-testid="stSidebar"] {
         background-color: #FFFFFF; /* White Sidebar */
         border-right: 1px solid #E6EAF1;
     }
     
-    /* Sidebar Text Colors (Dark) */
+    /* Sidebar Text Colors */
     section[data-testid="stSidebar"] h1, 
     section[data-testid="stSidebar"] h2, 
     section[data-testid="stSidebar"] h3, 
@@ -64,14 +62,12 @@ st.markdown("""
         cursor: pointer;
     }
 
-    /* Hover State (Deep Blue) */
     div[data-testid="stSidebar"] div.stRadio > div[role="radiogroup"] > label:hover {
         background-color: #111C43 !important; /* Deep Blue Background */
         color: #FFFFFF !important; /* White Text */
         border-color: #111C43;
     }
 
-    /* Selected Tab (Orange) */
     div[data-testid="stSidebar"] div.stRadio > div[role="radiogroup"] > label[data-checked="true"] {
         background-color: #FF8C00 !important; /* Orange Background */
         color: white !important;
@@ -79,11 +75,10 @@ st.markdown("""
         font-weight: 600;
         box-shadow: 0 4px 6px -1px rgba(255, 140, 0, 0.3);
     }
-    /* ======================================= */
 
     /* CARD STYLING (FORCING WHITE BOX) */
     div[data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #ffffff !important;  /* Force Pure White */
+        background-color: #ffffff !important;  
         border: 1px solid #e2e8f0 !important;
         border-radius: 10px !important;
         box-shadow: 0 2px 4px 0 rgba(0,0,0,0.05) !important;
@@ -155,7 +150,9 @@ st.markdown("""
             padding-bottom: 5px; 
             scrollbar-width: none; 
         }
+        
         .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar { display: none; }
+
         .stTabs [data-baseweb="tab"] {
             flex: 0 0 auto !important;      
             width: 31% !important;          
@@ -232,7 +229,6 @@ if "logged_in" not in st.session_state:
 if "edit_idx" not in st.session_state:
     st.session_state["edit_idx"] = None 
 
-# Permission Sync
 if st.session_state["logged_in"] and st.session_state["user"] in USERS:
     st.session_state["access"] = USERS[st.session_state["user"]]["access"]
 
@@ -424,7 +420,7 @@ def render_edit_form(edit_idx, data, worksheet_name, date_col):
                         new_logo = st.selectbox("Logo", ["W/O Logo", "Laser", "Pad"], index=["W/O Logo", "Laser", "Pad"].index(row_data.get('Logo', 'W/O Logo')) if row_data.get('Logo') in ["W/O Logo", "Laser", "Pad"] else 0)
                         new_bot = st.selectbox("Bottom", ["No", "Laser", "Pad"], index=["No", "Laser", "Pad"].index(row_data.get('Bottom Print', 'No')) if row_data.get('Bottom Print') in ["No", "Laser", "Pad"] else 0)
 
-                    st.markdown("---")
+                    st.divider()
                     c6, c7 = st.columns(2)
                     with c6: new_ready = st.number_input("Ready Qty", value=safe_float(row_data.get('Ready Qty')), step=0.01)
                     with c7: new_status = st.selectbox("Status", ["Pending", "Next Day", "Complete"], index=["Pending", "Next Day", "Complete"].index(row_data.get('Status', 'Pending')))
@@ -559,7 +555,6 @@ def manage_tab(tab_name, worksheet_name):
                 if "Date" in data.columns: data["Date"] = pd.to_datetime(data["Date"], errors='coerce')
                 
                 edited_df = st.data_editor(data, use_container_width=True, num_rows="fixed", key="order_editor", disabled=["_original_idx"], column_config={"Date": st.column_config.DateColumn("Date", format="YYYY-MM-DD"), "Qty": st.column_config.NumberColumn("Qty", format="%d"), "Transaction Type": st.column_config.SelectboxColumn("Type", options=["Order Received", "Dispatch"])})
-                
                 clean_view = data.drop(columns=["_original_idx"], errors='ignore')
                 clean_edited = edited_df.drop(columns=["_original_idx"], errors='ignore')
                 if not clean_view.equals(clean_edited):
@@ -691,7 +686,8 @@ def manage_tab(tab_name, worksheet_name):
                     df_calc["Qty"] = pd.to_numeric(df_calc["Qty"], errors="coerce").fillna(0)
                     stock_summary = df_calc.groupby("Item Name").apply(lambda x: pd.Series({"Inward": x[x["Transaction Type"] == "Inward"]["Qty"].sum(), "Outward": x[x["Transaction Type"] == "Outward"]["Qty"].sum()})).reset_index()
                     stock_summary["Balance"] = stock_summary["Inward"] - stock_summary["Outward"]
-                    st.dataframe(stock_summary.round(2).style.highlight_between(left=0.01, right=1000000, subset=["Balance"], color="#ffcdd2"), use_container_width=True, column_config={"Balance": st.column_config.NumberColumn("Net Balance")})
+                    # Store 2 decimal
+                    st.dataframe(stock_summary.round(2).style.highlight_between(left=0.01, right=1000000, subset=["Balance"], color="#ffcdd2"), use_container_width=True, column_config={"Balance": st.column_config.NumberColumn("Net Balance", format="%.2f")})
 
             if st.session_state["role"] == "Store":
                 st.write("### 📋 Transaction Log")
@@ -699,8 +695,9 @@ def manage_tab(tab_name, worksheet_name):
                 else: df_display = filtered_df.copy()
                 if "Qty" in df_display.columns: df_display["Qty"] = pd.to_numeric(df_display["Qty"], errors='coerce').fillna(0)
                 if "Date Of Entry" in df_display.columns: df_display["Date Of Entry"] = pd.to_datetime(df_display["Date Of Entry"], errors='coerce')
-                # Store gets explicit TYPE column visibility + Decimals
-                edited_df = st.data_editor(df_display, use_container_width=True, num_rows="fixed", key="store_editor", disabled=["_original_idx"], column_config={"Qty": st.column_config.NumberColumn("Qty"), "Date Of Entry": st.column_config.DateColumn("Date"), "Type": st.column_config.TextColumn("Item Type")})
+
+                # Store decimals kept
+                edited_df = st.data_editor(df_display, use_container_width=True, num_rows="fixed", key="store_editor", disabled=["_original_idx"], column_config={"Qty": st.column_config.NumberColumn("Qty", format="%.2f"), "Date Of Entry": st.column_config.DateColumn("Date"), "Type": st.column_config.TextColumn("Item Type")})
                 clean_view = df_display.drop(columns=["_original_idx"], errors='ignore')
                 clean_edited = edited_df.drop(columns=["_original_idx"], errors='ignore')
                 if not clean_view.equals(clean_edited):
@@ -721,6 +718,7 @@ def manage_tab(tab_name, worksheet_name):
                         with c7: recvd_from = st.text_input("Recvd From / Sent To")
                         with c8: vendor_brand = st.text_input("Vendor Name (Brand)")
                         with c9: invoice_no = st.text_input("Invoice No. (Inward Only)")
+
                         if st.form_submit_button("Submit Transaction"):
                             if not item_name: st.warning("⚠️ Item Name is required!")
                             else:
@@ -802,23 +800,18 @@ def manage_tab(tab_name, worksheet_name):
             c_ord, c_dis, c_ret = sum_cols(df_curr)
             p_ord, p_dis, p_ret = sum_cols(df_prev)
 
-            k1, k2, k3 = st.columns(3)
-            def get_delta(curr, prev):
-                if selected_period == "All Time": return None
-                diff = curr - prev
-                if prev == 0: return f"{diff}"
-                pct = round((diff / prev) * 100, 1)
-                return f"{diff} ({pct}%)"
+            with st.container(border=True):
+                k1, k2, k3 = st.columns(3)
+                def get_delta(curr, prev):
+                    if selected_period == "All Time": return None
+                    diff = curr - prev
+                    if prev == 0: return f"{diff}"
+                    pct = round((diff / prev) * 100, 1)
+                    return f"{diff} ({pct}%)"
 
-            with k1:
-                with st.container(border=True):
-                    st.metric("Total Orders", c_ord, delta=get_delta(c_ord, p_ord))
-            with k2:
-                with st.container(border=True):
-                    st.metric("Total Dispatched", c_dis, delta=get_delta(c_dis, p_dis))
-            with k3:
-                with st.container(border=True):
-                    st.metric("Total Returns", c_ret, delta=get_delta(c_ret, p_ret), delta_color="inverse")
+                with k1: st.metric("Total Orders", c_ord, delta=get_delta(c_ord, p_ord))
+                with k2: st.metric("Total Dispatched", c_dis, delta=get_delta(c_dis, p_dis))
+                with k3: st.metric("Total Returns", c_ret, delta=get_delta(c_ret, p_ret), delta_color="inverse")
 
         st.divider()
 
@@ -843,7 +836,6 @@ def manage_tab(tab_name, worksheet_name):
                         if not df_viz_filtered.empty:
                             daily_trend = df_viz_filtered.groupby(["Date", "Channel Name"])["Today's Order"].sum().reset_index()
                             fig_line = px.line(daily_trend, x="Date", y="Today's Order", color="Channel Name", title="Channel-wise Sales Trend", markers=True)
-                            # MOVE LEGEND TO BOTTOM
                             fig_line.update_layout(legend=dict(orientation="h", yanchor="bottom", y=-0.5, xanchor="center", x=0.5))
                             st.plotly_chart(fig_line, use_container_width=True)
                         else: st.info("No data for charts")
@@ -851,8 +843,7 @@ def manage_tab(tab_name, worksheet_name):
                         if not df_viz_filtered.empty and "Channel Name" in df_viz_filtered.columns:
                             channel_dist = df_viz_filtered.groupby("Channel Name")["Today's Order"].sum().reset_index()
                             fig_pie = px.pie(channel_dist, values="Today's Order", names="Channel Name", title="Channel Share", hole=0.4)
-                            # MOVE LEGEND TO BOTTOM FOR PIE
-                            fig_pie.update_layout(legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5))
+                            fig_pie.update_layout(legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5))
                             st.plotly_chart(fig_pie, use_container_width=True)
 
         st.divider()
