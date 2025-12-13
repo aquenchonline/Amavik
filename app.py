@@ -126,7 +126,6 @@ except Exception as e:
     st.stop()
 
 def safe_int(val):
-    """Safely converts value to int, returning 0 if failed."""
     try:
         num = pd.to_numeric(val, errors='coerce')
         return int(num) if pd.notna(num) else 0
@@ -384,7 +383,6 @@ def manage_tab(tab_name, worksheet_name):
                 st.cache_data.clear()
                 st.rerun()
 
-        # 🚀 FIX: Ensure required columns exist to prevent KeyError
         if "Item Name" not in data.columns: data["Item Name"] = ""
         if "Party Name" not in data.columns: data["Party Name"] = ""
         if "Qty" not in data.columns: data["Qty"] = 0
@@ -425,9 +423,16 @@ def manage_tab(tab_name, worksheet_name):
                     if st.button("💾 Save Log Changes", key="save_ord_log"): save_smart_update(data, edited_df, worksheet_name)
             else: st.info("No records found.")
 
+        # --- UPDATED SUMMARY TAB (FILTER LOGIC) ---
         with tab_summ:
             st.write("### 🔍 Pending Balance Analysis")
-            search_q = st.text_input("🔍 Search Item or Party", placeholder="Type to filter summary...", key="search_ord_sum")
+            
+            c_view, c_search = st.columns([1, 2])
+            with c_view:
+                view_mode = st.radio("📊 View Mode", ["Party-wise Summary", "Item-wise Summary", "Matrix View (Item vs Party)"], horizontal=True, label_visibility="collapsed")
+            with c_search:
+                search_q = st.text_input("🔍 Search Filter", placeholder="Filter by Item or Party...", label_visibility="collapsed")
+
             if not data.empty:
                 df_sum = data.copy()
                 if search_q:
@@ -435,11 +440,35 @@ def manage_tab(tab_name, worksheet_name):
                     df_sum = df_sum[mask]
 
                 if not df_sum.empty:
-                    pivot = df_sum.pivot_table(index=['Party Name', 'Item Name'], columns='Transaction Type', values='Qty', aggfunc='sum', fill_value=0).reset_index()
-                    if "Order Received" not in pivot.columns: pivot["Order Received"] = 0
-                    if "Dispatch" not in pivot.columns: pivot["Dispatch"] = 0
-                    pivot["Pending Balance"] = pivot["Order Received"] - pivot["Dispatch"]
-                    st.dataframe(pivot.style.highlight_between(left=1, right=1000000, subset=["Pending Balance"], color="#ffcdd2"), use_container_width=True, column_config={"Pending Balance": st.column_config.NumberColumn("Pending Qty", format="%d"), "Order Received": st.column_config.NumberColumn("Total Ordered", format="%d"), "Dispatch": st.column_config.NumberColumn("Total Dispatched", format="%d")})
+                    # Base Pivot Calculation
+                    base_pivot = df_sum.pivot_table(index=['Party Name', 'Item Name'], columns='Transaction Type', values='Qty', aggfunc='sum', fill_value=0).reset_index()
+                    
+                    if "Order Received" not in base_pivot.columns: base_pivot["Order Received"] = 0
+                    if "Dispatch" not in base_pivot.columns: base_pivot["Dispatch"] = 0
+                    base_pivot["Pending Balance"] = base_pivot["Order Received"] - base_pivot["Dispatch"]
+
+                    # VIEW LOGIC
+                    if view_mode == "Matrix View (Item vs Party)":
+                        # Create Matrix of Pending Balances
+                        matrix = base_pivot.pivot_table(index="Item Name", columns="Party Name", values="Pending Balance", aggfunc="sum", fill_value=0, margins=True, margins_name="Total")
+                        st.dataframe(matrix.style.highlight_between(left=1, right=1000000, color="#ffcdd2"), use_container_width=True)
+                    
+                    elif view_mode == "Party-wise Summary":
+                        st.dataframe(
+                            base_pivot.sort_values(by="Party Name").style.highlight_between(left=1, right=1000000, subset=["Pending Balance"], color="#ffcdd2"), 
+                            use_container_width=True,
+                            column_config={"Pending Balance": st.column_config.NumberColumn("Pending", format="%d")}
+                        )
+                    
+                    else: # Item-wise
+                        # Re-group by Item then Party
+                        item_pivot = base_pivot.sort_values(by="Item Name")[["Item Name", "Party Name", "Order Received", "Dispatch", "Pending Balance"]]
+                        st.dataframe(
+                            item_pivot.style.highlight_between(left=1, right=1000000, subset=["Pending Balance"], color="#ffcdd2"), 
+                            use_container_width=True,
+                            column_config={"Pending Balance": st.column_config.NumberColumn("Pending", format="%d")}
+                        )
+
                 else: st.warning("No data matches your search.")
             else: st.info("No Order data available.")
         return 
@@ -455,7 +484,6 @@ def manage_tab(tab_name, worksheet_name):
                 st.cache_data.clear()
                 st.rerun()
         
-        # --- SAFE COLUMN CREATION TO PREVENT CRASH ---
         if "Status" not in data.columns: data["Status"] = "Pending"
         data["Status"] = data["Status"].fillna("Pending").replace("", "Pending")
         
@@ -477,10 +505,7 @@ def manage_tab(tab_name, worksheet_name):
             if "Item Name" not in data.columns: data["Item Name"] = ""
             if "Ready Qty" not in data.columns: data["Ready Qty"] = 0
 
-        # Safe date conversion
         data["_dt_obj"] = pd.to_datetime(data[date_col], errors='coerce').dt.date
-        
-        # Safe priority conversion
         data[prio_col] = pd.to_numeric(data[prio_col], errors='coerce').fillna(999)
 
         all_pending = data[data["Status"] != "Complete"].copy()
@@ -526,7 +551,6 @@ def manage_tab(tab_name, worksheet_name):
                 st.cache_data.clear()
                 st.rerun()
 
-        # 🚀 FIX: Ensure Store columns exist
         if "Item Name" not in data.columns: data["Item Name"] = ""
         if "Qty" not in data.columns: data["Qty"] = 0
         if "Recvd From" not in data.columns: data["Recvd From"] = ""
