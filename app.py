@@ -192,31 +192,29 @@ st.markdown("""
     
     /* MOBILE OPTIMIZATIONS */
     @media (max-width: 768px) {
-        /* Sliding Tabs */
+        div[data-testid="column"] {
+            width: 50% !important;
+            flex: 0 0 50% !important;
+            min-width: 50% !important;
+        }
+
+        /* FIXED SLIDING TABS WITH SPACING */
         .stTabs [data-baseweb="tab-list"] {
             display: flex !important;
             flex-wrap: nowrap !important;
             overflow-x: auto !important;
             white-space: nowrap !important;
-            gap: 5px !important;
+            gap: 20px !important;  /* Space between tabs */
             padding-bottom: 5px; 
+            padding-left: 5px;
             scrollbar-width: none; 
-            -ms-overflow-style: none; 
         }
-        .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar { display: none; }
         
         .stTabs [data-baseweb="tab"] {
             flex: 0 0 auto !important;
-            width: 31% !important; 
-            font-size: 0.75rem;
-            padding: 5px 10px;
-        }
-
-        /* 2 Cards per Row Logic */
-        div[data-testid="column"] {
-            width: 50% !important;
-            flex: 0 0 50% !important;
-            min-width: 50% !important;
+            width: auto !important; /* Auto width based on text */
+            font-size: 0.8rem;
+            padding: 5px 15px; /* Add padding inside tab for clickability */
         }
     }
 </style>
@@ -413,6 +411,10 @@ def color_status(val):
     return ''
 
 def render_styled_table(df, key_prefix, editable=False, decimal_format=None):
+    """
+    Renders a dataframe with Pagination (10 rows/page) and Search.
+    decimal_format: String like "%.1f" to force decimals (used for Store)
+    """
     if df.empty:
         st.info("No data available.")
         return None
@@ -460,6 +462,7 @@ def render_styled_table(df, key_prefix, editable=False, decimal_format=None):
     for dc in date_cols:
         st_config[dc] = st.column_config.DateColumn(dc, format="YYYY-MM-DD")
     
+    # Store Tab Decimal Logic (Force 1 decimal max)
     if decimal_format:
         num_cols = df_page.select_dtypes(include=['float', 'int']).columns
         for nc in num_cols:
@@ -514,6 +517,7 @@ def render_styled_table(df, key_prefix, editable=False, decimal_format=None):
             st.session_state[f"page_{key_prefix}"] += 1
             st.rerun()
 
+    # Apply CSS class for buttons
     st.markdown("""
     <script>
         var buttons = window.parent.document.querySelectorAll('button[kind="secondary"]');
@@ -539,13 +543,8 @@ def render_task_cards(df_display, date_col, role_name, data, worksheet_name):
             emoji_prio = "🔴" if prio == 1 else "🟡" if prio == 2 else "🟢"
             
             with st.container(border=True):
-                c_head, c_del = st.columns([5, 1])
-                with c_head:
-                    st.caption(f"{emoji_prio} Priority {prio} | {row.get(date_col, '-')}")
-                with c_del:
-                    if st.session_state["role"] == "Admin":
-                        if st.button("✕", key=f"del_{worksheet_name}_{index}", help="Delete"):
-                            delete_task(data, index, worksheet_name)
+                # Header without Delete button
+                st.caption(f"{emoji_prio} Priority {prio} | {row.get(date_col, '-')}")
 
                 if worksheet_name == "Packing":
                     party_name = str(row.get('Party Name', '')).upper()
@@ -659,19 +658,17 @@ def render_add_task_form(data, worksheet_name):
                         save_new_row(data, new_task, worksheet_name)
             else:
                 c1, c2, c3 = st.columns(3)
-                with c1: 
-                    n_date = st.date_input("Order Date")
-                    n_party = st.text_input("Party Name")
-                    n_logo = st.selectbox("Logo", ["W/O Logo", "Laser", "Pad"])
-                with c2:
-                    n_item = st.text_input("Item Name")
-                    n_qty = st.number_input("Order Qty", min_value=1.0, step=0.01)
-                    n_bot = st.selectbox("Bottom Print", ["No", "Laser", "Pad"])
-                with c3:
-                    n_prio = st.number_input("Priority", min_value=1, value=1)
-                    n_box = st.selectbox("Box", ["Loose", "Brown Box", "White Box", "Box"])
-                    n_rem = st.text_input("Remarks")
-                
+                with c1: n_date = st.date_input("Order Date")
+                with c2: n_party = st.text_input("Party Name")
+                with c3: n_logo = st.selectbox("Logo", ["W/O Logo", "Laser", "Pad"])
+                c4, c5 = st.columns(2)
+                with c4: n_item = st.text_input("Item Name")
+                with c5: n_qty = st.number_input("Order Qty", min_value=1.0, step=0.01)
+                c6, c7 = st.columns(2)
+                with c6: n_bot = st.selectbox("Bottom Print", ["No", "Laser", "Pad"])
+                with c7: n_prio = st.number_input("Priority", min_value=1, value=1)
+                n_box = st.selectbox("Box", ["Loose", "Brown Box", "White Box", "Box"])
+                n_rem = st.text_input("Remarks")
                 if st.form_submit_button("🚀 Assign"):
                     if not n_item: st.warning("Item Name Required")
                     else:
