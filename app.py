@@ -1,4 +1,4 @@
-import streamlit as st
+\import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import streamlit.components.v1 as components
 import pandas as pd
@@ -415,23 +415,62 @@ def delete_task(original_data, index_to_delete, sheet_name):
     except Exception as e: st.error(f"Error deleting: {e}")
 
 # ------------------------------------------------------------------
-# 7. VISUALIZATION & TABLE HELPERS (PAGINATION ADDED)
+# 7. VISUALIZATION & TABLE HELPERS (NEW GRAPH LIBRARY)
 # ------------------------------------------------------------------
-def style_plotly_chart(fig):
-    """Applies the GXON Spline & Gradient Style to Charts"""
+def create_spline_chart(df, x_col, y_col, color_col=None):
+    """Creates a Modern Spline Area Chart using Plotly GO"""
+    fig = go.Figure()
+    
+    # Modern Color Palette
+    colors = ['#5D87FF', '#49BEFF', '#FFB624', '#FF4B4B']
+    
+    if color_col:
+        unique_groups = df[color_col].unique()
+        for i, group in enumerate(unique_groups):
+            group_df = df[df[color_col] == group]
+            fig.add_trace(go.Scatter(
+                x=group_df[x_col], 
+                y=group_df[y_col],
+                mode='lines+markers',
+                name=group,
+                line=dict(width=3, shape='spline', color=colors[i % len(colors)]),
+                fill='tozeroy',
+                fillcolor=f"rgba{tuple(list(int(colors[i%len(colors)][1:][j:j+2], 16) for j in (0, 2, 4)) + [0.1])}"
+            ))
+    else:
+        fig.add_trace(go.Scatter(
+            x=df[x_col], 
+            y=df[y_col],
+            mode='lines+markers',
+            line=dict(width=3, shape='spline', color='#5D87FF'),
+            fill='tozeroy',
+            fillcolor='rgba(93, 135, 255, 0.1)'
+        ))
+
     fig.update_layout(
         plot_bgcolor='white',
         paper_bgcolor='white',
-        font_family="Plus Jakarta Sans",
-        font_color="#2A3547",
-        title_font_size=16,
-        margin=dict(l=20, r=20, t=40, b=50),
+        font=dict(family="Plus Jakarta Sans", size=12, color="#2A3547"),
+        margin=dict(l=20, r=20, t=20, b=40),
         xaxis=dict(showgrid=False, zeroline=False),
         yaxis=dict(showgrid=True, gridcolor='#EAEFF4', zeroline=False),
+        hovermode="x unified",
         legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5)
     )
-    if hasattr(fig, 'data') and len(fig.data) > 0 and fig.data[0].type == 'scatter':
-         fig.update_traces(fill='tozeroy', mode='lines+markers', line=dict(width=3))
+    return fig
+
+def create_donut_chart(df, values, names):
+    """Creates a Modern Donut Chart"""
+    fig = px.pie(df, values=values, names=names, hole=0.7)
+    fig.update_traces(textposition='outside', textinfo='percent+label', marker=dict(colors=['#5D87FF', '#49BEFF', '#FFB624', '#13DEB9']))
+    fig.update_layout(
+        showlegend=True,
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        font=dict(family="Plus Jakarta Sans", size=12, color="#2A3547"),
+        margin=dict(l=20, r=20, t=20, b=50),
+        legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5)
+    )
     return fig
 
 def color_status(val):
@@ -956,7 +995,7 @@ def manage_tab(tab_name, worksheet_name):
                 if filtered_df.empty: df_display = pd.DataFrame(columns=data.columns).drop(columns=["_original_idx"], errors="ignore")
                 else: df_display = filtered_df.copy()
                 
-                if "Qty" in df_display.columns: df_display["Qty"] = pd.to_numeric(df_display["Qty"], errors='coerce').fillna(0).astype(float)
+                if "Qty" in df_display.columns: df_display["Qty"] = pd.to_numeric(df_display["Qty"], errors='coerce').fillna(0).astype(float).round(1)
                 if "Date Of Entry" in df_display.columns: df_display["Date Of Entry"] = pd.to_datetime(df_display["Date Of Entry"], errors='coerce')
                 
                 edited_df = render_styled_table(df_display, "store_log", editable=True, decimal_format="%.1f")
@@ -1109,18 +1148,13 @@ def manage_tab(tab_name, worksheet_name):
                     g_col, p_col = st.columns([2, 1])
                     with g_col:
                         if not df_viz_filtered.empty:
-                            daily_trend = df_viz_filtered.groupby(["Date", "Channel Name"])["Today's Order"].sum().reset_index()
-                            fig_line = px.line(daily_trend, x="Date", y="Today's Order", color="Channel Name", title="Channel-wise Sales Trend", markers=True)
-                            fig_line = style_plotly_chart(fig_line)
-                            fig_line.update_layout(legend=dict(orientation="h", yanchor="bottom", y=-0.5, xanchor="center", x=0.5))
+                            fig_line = create_spline_chart(df_viz_filtered, "Date", "Today's Order", "Channel Name")
                             st.plotly_chart(fig_line, use_container_width=True)
                         else: st.info("No data for charts")
                     with p_col:
                         if not df_viz_filtered.empty and "Channel Name" in df_viz_filtered.columns:
                             channel_dist = df_viz_filtered.groupby("Channel Name")["Today's Order"].sum().reset_index()
-                            fig_pie = px.pie(channel_dist, values="Today's Order", names="Channel Name", title="Channel Share", hole=0.7)
-                            fig_pie = style_plotly_chart(fig_pie)
-                            fig_pie.update_layout(legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5))
+                            fig_pie = create_donut_chart(channel_dist, "Today's Order", "Channel Name")
                             st.plotly_chart(fig_pie, use_container_width=True)
 
         st.divider()
