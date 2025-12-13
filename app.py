@@ -17,7 +17,7 @@ st.set_page_config(
 )
 
 # ------------------------------------------------------------------
-# 2. UI/UX STYLING (AdminUX Inspired)
+# 2. UI/UX STYLING (AdminUX Inspired - FORCED WHITE CARDS)
 # ------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -29,7 +29,7 @@ st.markdown("""
         font-family: 'Inter', sans-serif;
     }
     
-    /* BACKGROUND COLORS - KEEPING THIS UNCHANGED */
+    /* BACKGROUND COLORS */
     .stApp {
         background-color: #F3F6FD; /* Light Blue-Gray Background */
     }
@@ -73,21 +73,35 @@ st.markdown("""
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
 
-    /* CARD STYLING (FORCING WHITE BOX) */
-    div[data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: white !important; /* Added !important to force white */
-        border-radius: 10px;
-        border: 1px solid #e2e8f0;
-        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
-        padding: 16px;
-        margin-bottom: 10px;
-    }
+    /* ============================================================ */
+    /* 🚀 FORCE WHITE CARDS - THE FIX IS HERE                      */
+    /* ============================================================ */
     
-    /* Remove shadow from expanders inside cards to avoid double shadow */
-    div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stVerticalBlockBorderWrapper"] {
-        box-shadow: none;
-        border: 1px solid #f0f2f6;
+    /* Target any container with border=True */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        background-color: #ffffff !important;  /* Force Pure White */
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 10px !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important;
+        padding: 16px !important;
+        margin-bottom: 1rem;
     }
+
+    /* Prevent double shadowing on nested elements */
+    div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stVerticalBlockBorderWrapper"] {
+        box-shadow: none !important;
+        border: 1px solid #f1f5f9 !important;
+        background-color: #f8fafc !important; /* Slightly gray for nested items */
+    }
+
+    /* Force text color inside cards to be dark (readable on white) */
+    div[data-testid="stVerticalBlockBorderWrapper"] p,
+    div[data-testid="stVerticalBlockBorderWrapper"] span,
+    div[data-testid="stVerticalBlockBorderWrapper"] div {
+        color: #1e293b; /* Dark Slate */
+    }
+
+    /* ============================================================ */
 
     /* BUTTONS */
     .stButton button {
@@ -106,7 +120,7 @@ st.markdown("""
     .stTabs [data-baseweb="tab"] {
         height: 40px;
         white-space: pre-wrap;
-        background-color: #f8f9fa;
+        background-color: #ffffff; /* White Tabs */
         border-radius: 8px;
         border: 1px solid #e0e0e0;
         padding: 4px 16px;
@@ -116,7 +130,7 @@ st.markdown("""
     }
 
     .stTabs [aria-selected="true"] {
-        background-color: #FF4B4B;
+        background-color: #FF4B4B !important;
         color: white !important;
         border: 1px solid #FF4B4B;
         font-weight: 600;
@@ -271,7 +285,8 @@ def safe_float(val):
 def smart_format(val):
     try:
         num = float(val)
-        if num.is_integer(): return int(num)
+        if num.is_integer():
+            return int(num)
         return round(num, 2)
     except:
         return 0
@@ -304,6 +319,7 @@ def save_smart_update(original_data, edited_subset, sheet_name):
             elif pd.isna(idx):
                 new_data = {col: row[col] for col in all_cols if col in row}
                 original_data = pd.concat([original_data, pd.DataFrame([new_data])], ignore_index=True)
+        
         final = original_data.drop(columns=["_original_idx"], errors='ignore')
         conn.update(spreadsheet=SHEET_URL, worksheet=sheet_name, data=final)
         st.toast("✅ Saved!", icon="💾")
@@ -702,6 +718,145 @@ def manage_tab(tab_name, worksheet_name):
         return
 
     # ===============================================================
+    # C. STORE TAB LOGIC
+    # ===============================================================
+    if worksheet_name == "Store":
+        st.subheader("📦 Store Management")
+
+        if "Item Name" not in data.columns: data["Item Name"] = ""
+        if "Qty" not in data.columns: data["Qty"] = 0
+        if "Recvd From" not in data.columns: data["Recvd From"] = ""
+        if "Type" not in data.columns: data["Type"] = ""
+        if "Transaction Type" not in data.columns: data["Transaction Type"] = ""
+        if "Invoice No." not in data.columns: data["Invoice No."] = ""
+
+        tab_inv, tab_plan = st.tabs(["📊 Inventory Dashboard", "📅 Packing Planning"])
+
+        with tab_inv:
+            items_list = sorted(data["Item Name"].astype(str).unique())
+            vendor_list = sorted(data["Recvd From"].astype(str).unique())
+            type_list = sorted(data["Type"].astype(str).unique())
+
+            c1, c2 = st.columns([1, 3])
+            with c1: d_filter = st.selectbox("📅 Date Filter", ["All", "Today", "Yesterday", "Prev 7 Days", "This Month"], key="st_date")
+            with c2: search_query = st.text_input("🔍 Universal Search (Item, Party, Type, Inv No.)", placeholder="Type at least 3 digits to search...")
+
+            filtered_df = filter_by_date(data, d_filter, date_col_name="Date Of Entry")
+            if search_query and len(search_query) >= 3:
+                mask = (
+                    filtered_df['Item Name'].astype(str).str.contains(search_query, case=False, na=False) |
+                    filtered_df['Recvd From'].astype(str).str.contains(search_query, case=False, na=False) |
+                    filtered_df['Type'].astype(str).str.contains(search_query, case=False, na=False) |
+                    filtered_df['Transaction Type'].astype(str).str.contains(search_query, case=False, na=False) |
+                    filtered_df['Invoice No.'].astype(str).str.contains(search_query, case=False, na=False)
+                )
+                filtered_df = filtered_df[mask]
+                found_items = filtered_df['Item Name'].unique().tolist()
+                if found_items: st.caption(f"💡 **Top Suggestions:** {', '.join(found_items[:5])}")
+                else: st.warning("No matching items found.")
+
+            st.divider()
+
+            if not filtered_df.empty:
+                with st.expander("📊 Live Stock Analysis (Based on Current Search)", expanded=True):
+                    df_calc = filtered_df.copy()
+                    df_calc["Qty"] = pd.to_numeric(df_calc["Qty"], errors="coerce").fillna(0)
+                    stock_summary = []
+                    unique_items = df_calc["Item Name"].unique()
+                    for item in unique_items:
+                        item_data = df_calc[df_calc["Item Name"] == item]
+                        inward = item_data[item_data["Transaction Type"] == "Inward"]["Qty"].sum()
+                        outward = item_data[item_data["Transaction Type"] == "Outward"]["Qty"].sum()
+                        balance = inward - outward
+                        last_entry = item_data.iloc[-1]
+                        stock_summary.append({"Item Name": item, "Type": last_entry.get("Type",""), "Total Inward": inward, "Total Outward": outward, "Net Change": balance, "UOM": last_entry.get("UOM","")})
+                    
+                    df_sum_res = pd.DataFrame(stock_summary)
+                    if not df_sum_res.empty:
+                        # ALLOW DECIMALS IN STORE
+                        df_sum_res = df_sum_res.round(2)
+                        st.dataframe(df_sum_res.style.highlight_between(left=0.01, right=1000000, subset=["Net Change"], color="#ffcdd2"), use_container_width=True, column_config={"Net Change": st.column_config.NumberColumn("Net Balance")})
+
+            if st.session_state["role"] == "Store":
+                st.write("### 📋 Transaction Log")
+                if filtered_df.empty: df_display = pd.DataFrame(columns=data.columns).drop(columns=["_original_idx"], errors="ignore")
+                else: df_display = filtered_df.copy()
+
+                if "Qty" in df_display.columns: df_display["Qty"] = pd.to_numeric(df_display["Qty"], errors='coerce').fillna(0)
+                if "Date Of Entry" in df_display.columns: df_display["Date Of Entry"] = pd.to_datetime(df_display["Date Of Entry"], errors='coerce')
+
+                # Removed format="%d" to allow decimals
+                edited_df = st.data_editor(df_display, use_container_width=True, num_rows="fixed", key="store_editor", disabled=["_original_idx"], column_config={"Qty": st.column_config.NumberColumn("Qty"), "Date Of Entry": st.column_config.DateColumn("Date Of Entry", format="YYYY-MM-DD")})
+
+                clean_view = df_display.drop(columns=["_original_idx"], errors='ignore')
+                clean_edited = edited_df.drop(columns=["_original_idx"], errors='ignore')
+                if not clean_view.equals(clean_edited):
+                    if st.button("💾 Save Changes", key="save_store"): save_smart_update(data, edited_df, worksheet_name)
+
+                st.divider()
+                with st.expander("➕ Update Stock (Add New Entry)", expanded=True):
+                    with st.form("store_form"):
+                        c1, c2, c3 = st.columns(3)
+                        with c1: date_ent = st.date_input("Date Of Entry", value=date.today())
+                        with c2: trans_type = st.selectbox("Transaction Type", ["Inward", "Outward"])
+                        with c3: qty = st.number_input("Quantity", min_value=1.0, step=0.01)
+                        c4, c5, c6 = st.columns(3)
+                        with c4: item_name = st.text_input("Item Name")
+                        with c5: uom = st.selectbox("UOM", ["Pcs", "Boxes", "Kg", "Ltr", "Set", "Packet"])
+                        with c6: i_type = st.selectbox("Type", ["Inner Box", "Outer Box", "Washer", "String", "Cap", "Bubble", "Bottle", "Other"])
+                        c7, c8, c9 = st.columns(3)
+                        with c7: recvd_from = st.text_input("Recvd From / Sent To")
+                        with c8: vendor_brand = st.text_input("Vendor Name (Brand)")
+                        with c9: invoice_no = st.text_input("Invoice No. (Inward Only)")
+
+                        if st.form_submit_button("Submit Transaction"):
+                            if not item_name: st.warning("⚠️ Item Name is required!")
+                            else:
+                                new_entry = pd.DataFrame([{"Date Of Entry": str(date_ent), "Recvd From": recvd_from, "Vendor Name(Brand)": vendor_brand, "Type": i_type, "Item Name": item_name, "Qty": qty, "UOM": uom, "Transaction Type": trans_type, "Invoice No.": invoice_no}])
+                                save_new_row(data, new_entry, worksheet_name)
+                    inject_enter_key_navigation()
+            else:
+                st.divider()
+                st.info("🚫 **Restricted Area:** Detailed Transaction Logs and Data Entry are only visible to the Store Incharge.")
+        
+        with tab_plan:
+            st.info("ℹ️ Showing Packing Orders for: **Last 7 Days & Next 5 Days**")
+            try:
+                packing_data = conn.read(spreadsheet=SHEET_URL, worksheet="Packing", ttl=0)
+                if packing_data is None or packing_data.empty: packing_data = pd.DataFrame()
+            except:
+                packing_data = pd.DataFrame()
+
+            if not packing_data.empty:
+                d_col = "Order Date" if "Order Date" in packing_data.columns else "Date"
+                packing_data["dt_obj"] = pd.to_datetime(packing_data[d_col], errors='coerce').dt.date
+                today = date.today()
+                mask_plan = (packing_data["dt_obj"] >= (today - timedelta(days=7))) & (packing_data["dt_obj"] <= (today + timedelta(days=5)))
+                plan_df = packing_data[mask_plan].copy()
+                
+                if not plan_df.empty:
+                    cols_to_show = []
+                    if d_col in plan_df.columns: cols_to_show.append(d_col)
+                    if "Party Name" in plan_df.columns: cols_to_show.append("Party Name")
+                    if "Item Name" in plan_df.columns: cols_to_show.append("Item Name")
+                    if "Qty" in plan_df.columns: cols_to_show.append("Qty")
+                    
+                    final_plan_view = plan_df[cols_to_show].copy()
+                    final_plan_view["Inner Qty Required"] = "Calculate"
+                    final_plan_view["Outer Box Required"] = "Calculate"
+                    # Round qty in plan view
+                    if "Qty" in final_plan_view.columns:
+                        final_plan_view["Qty"] = pd.to_numeric(final_plan_view["Qty"], errors='coerce').fillna(0).astype(int)
+                    
+                    st.dataframe(final_plan_view, use_container_width=True, column_config={d_col: st.column_config.DateColumn("Order Date"), "Qty": st.column_config.NumberColumn("Order Qty", format="%d")})
+                else:
+                    st.info("No packing orders found in the selected date range.")
+            else:
+                st.info("Packing Sheet is empty.")
+
+        return # End Store Logic
+
+    # ===============================================================
     # D. ECOMMERCE DASHBOARD LOGIC
     # ===============================================================
     if worksheet_name == "Ecommerce":
@@ -768,7 +923,6 @@ def manage_tab(tab_name, worksheet_name):
             c_ord, c_dis, c_ret = sum_cols(df_curr)
             p_ord, p_dis, p_ret = sum_cols(df_prev)
 
-            # WRAP KPIS IN WHITE CARDS
             k1, k2, k3 = st.columns(3)
             def get_delta(curr, prev):
                 if selected_period == "All Time": return None
@@ -789,7 +943,6 @@ def manage_tab(tab_name, worksheet_name):
 
         st.divider()
 
-        # CHART SECTION (WHITE CARD)
         with st.container(border=True):
             st.markdown("### 📈 Visual Trends")
             if not data.empty:
@@ -821,7 +974,6 @@ def manage_tab(tab_name, worksheet_name):
 
         st.divider()
 
-        # LOGS SECTION (WHITE CARD)
         with st.container(border=True):
             st.write("### 📋 Detailed Logs")
             if df_curr.empty:
