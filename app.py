@@ -10,8 +10,8 @@ from datetime import date, timedelta, datetime
 # 1. PAGE CONFIGURATION
 # ------------------------------------------------------------------
 st.set_page_config(
-    page_title="Amavik ERP", 
-    layout="wide", 
+    page_title="Amavik ERP",
+    layout="wide",
     page_icon="🏭",
     initial_sidebar_state="expanded"
 )
@@ -28,22 +28,22 @@ st.markdown("""
     html, body, [class*="css"] {
         font-family: 'Inter', sans-serif;
     }
-    
+
     /* BACKGROUND COLORS */
     .stApp {
         background-color: #F3F6FD; /* Light Blue-Gray Background */
     }
-    
+
     /* SIDEBAR STYLING */
     section[data-testid="stSidebar"] {
         background-color: #1e293b; /* Deep Slate Navy */
     }
-    
+
     /* Sidebar Text Colors */
-    section[data-testid="stSidebar"] h1, 
-    section[data-testid="stSidebar"] h2, 
-    section[data-testid="stSidebar"] h3, 
-    section[data-testid="stSidebar"] span, 
+    section[data-testid="stSidebar"] h1,
+    section[data-testid="stSidebar"] h2,
+    section[data-testid="stSidebar"] h3,
+    section[data-testid="stSidebar"] span,
     section[data-testid="stSidebar"] p {
         color: #f1f5f9 !important;
     }
@@ -151,7 +151,7 @@ def inject_enter_key_navigation():
 USERS = {
     "Production": {"pass": "Amavik@80", "role": "Production", "access": ["Production"]},
     "Packing":    {"pass": "Amavik@97", "role": "Packing",    "access": ["Packing"]},
-    "Store":      {"pass": "Amavik@17", "role": "Store",      "access": ["Store"]}, 
+    "Store":      {"pass": "Amavik@17", "role": "Store",      "access": ["Store"]},
     "Ecommerce":  {"pass": "Amavik@12", "role": "Ecommerce",  "access": ["Ecommerce", "Order"]},
     "Amar":       {"pass": "Aquench@1933", "role": "Admin",   "access": ["Order", "Production", "Packing", "Store", "Ecommerce", "Configuration"]}
 }
@@ -165,7 +165,7 @@ if "logged_in" not in st.session_state:
     st.session_state["role"] = None
 
 if "edit_idx" not in st.session_state:
-    st.session_state["edit_idx"] = None 
+    st.session_state["edit_idx"] = None
 
 # Permission Sync
 if st.session_state["logged_in"] and st.session_state["user"] in USERS:
@@ -226,7 +226,7 @@ def smart_format(val):
 
 def filter_by_date(df, filter_option, date_col_name="Date"):
     if df.empty: return df
-    df = df.copy() 
+    df = df.copy()
     if date_col_name not in df.columns: return df
     df["temp_date"] = pd.to_datetime(df[date_col_name], errors='coerce').dt.date
     today = date.today()
@@ -296,42 +296,51 @@ def render_task_cards(df_display, date_col, role_name, data, worksheet_name):
     for i, (index, row) in enumerate(df_display.iterrows()):
         col = cols[i % 4]
         with col:
-            prio = smart_format(row.get('Priority') if worksheet_name == "Production" else row.get('Order Priority')) or 999
-            emoji_prio = "🔴" if prio == 1 else "🟡" if prio == 2 else "🟢"
-            
-            with st.container(border=True):
+            with st.container(border=True): # Uses the new CSS box-shadow look
                 c_head, c_del = st.columns([4, 1])
-                with c_head: 
+                with c_head:
                     if worksheet_name == "Production":
-                        st.markdown(f"**{emoji_prio} Priority: {prio}**")
+                        prio = smart_format(row.get('Priority')) or 999
+                        emoji_prio = "🔴" if prio == 1 else "🟡" if prio == 2 else "🟢"
+                        st.markdown(f"### **{emoji_prio} Production Task**")
                     else:
-                        st.markdown(f"**{emoji_prio} {row.get('Party Name', '')}**")
+                        prio = smart_format(row.get('Order Priority')) or 999
+                        emoji_prio = "🔴" if prio == 1 else "🟡" if prio == 2 else "🟢"
+                        st.markdown(f"### **{emoji_prio} Packing Task**")
                 
                 with c_del:
                     if st.session_state["role"] == "Admin":
-                        if st.button("❌", key=f"del_{worksheet_name}_{index}", help="Delete"):
+                        if st.button("❌", key=f"del_{worksheet_name}_{index}"):
                             delete_task(data, index, worksheet_name)
 
-                st.caption(f"{row.get(date_col, '-')}")
-                st.write(f"**{row.get('Item Name', 'Item')}**")
-                
+                if worksheet_name == "Production":
+                    st.markdown(f"<h2 style='color: #0f172a;'>{prio}</h2>", unsafe_allow_html=True)
+                else:
+                    st.markdown(f"<h2 style='color: #0f172a;'>{row.get('Party Name', '')}</h2>", unsafe_allow_html=True)
+
                 qty_key = "Quantity" if worksheet_name == "Production" else "Qty"
                 qty_val = smart_format(row.get(qty_key))
                 ready_val = smart_format(row.get('Ready Qty'))
 
                 c1, c2 = st.columns(2)
-                with c1: st.write(f"**Target:** {qty_val}")
-                with c2: st.write(f"**Ready:** {ready_val}")
+                with c1:
+                    st.write("Target Qty")
+                    st.markdown(f"<h3 style='color: #0f172a;'>{qty_val}</h3>", unsafe_allow_html=True)
+                with c2:
+                    st.write("Ready Qty")
+                    st.markdown(f"<h3 style='color: #0f172a;'>{ready_val}</h3>", unsafe_allow_html=True)
+
+                st.caption(f"{row.get(date_col, '-')}")
+                st.write(f"**{row.get('Item Name', 'Item')}**")
 
                 if worksheet_name == "Packing":
                     details = []
-                    if row.get('Logo'): details.append(f"Logo: {row['Logo']}")
-                    if row.get('Bottom Print'): details.append(f"Print: {row['Bottom Print']}")
-                    if row.get('Box'): details.append(f"Box: {row['Box']}")
+                    if row.get('Logo'): details.append(f"{row['Logo']}")
+                    if row.get('Box'): details.append(f"{row['Box']}")
                     if details: st.caption(" | ".join(details))
                 
                 rem_key = "Notes" if worksheet_name == "Production" else "Remarks"
-                if row.get(rem_key): st.info(f"{row[rem_key]}", icon="📝")
+                if row.get(rem_key): st.info(f"{row[rem_key]}")
                 
                 btn_label = "✏️ Edit" if st.session_state["role"] == "Admin" else "✅ Update"
                 if st.button(btn_label, key=f"btn_{worksheet_name}_{index}", use_container_width=True):
@@ -341,7 +350,7 @@ def render_task_cards(df_display, date_col, role_name, data, worksheet_name):
 def render_edit_form(edit_idx, data, worksheet_name, date_col):
     if edit_idx in data.index:
         row_data = data.loc[edit_idx]
-        st.markdown(f"### ✏️ Editing: {row_data.get('Item Name', 'Task')}")
+        st.markdown(f"### ✏️ Edit: {row_data.get('Item Name', 'Task')}")
         
         col_qty = "Quantity" if worksheet_name == "Production" else "Qty"
         col_prio = "Priority" if worksheet_name == "Production" else "Order Priority"
@@ -349,26 +358,28 @@ def render_edit_form(edit_idx, data, worksheet_name, date_col):
 
         if st.session_state["role"] == "Admin":
             with st.form(f"admin_{worksheet_name}_edit"):
-                c1, c2, c3 = st.columns(3)
+                c1, c2 = st.columns(2)
                 with c1: new_date = st.date_input("Date", pd.to_datetime(row_data.get(date_col, date.today())).date())
-                with c2: new_item = st.text_input("Item Name", row_data.get('Item Name', ''))
-                with c3: new_qty = st.number_input("Target Qty", value=safe_float(row_data.get(col_qty)), step=0.01)
+                with c2: new_item = st.text_input("Item", row_data.get('Item Name', ''))
                 
-                c4, c5 = st.columns(2)
-                with c4: new_prio = st.number_input("Priority", value=int(safe_float(row_data.get(col_prio)) or 1))
-                with c5: new_rem = st.text_input("Notes/Remarks", row_data.get(col_rem, ''))
+                c3, c4 = st.columns(2)
+                with c3: new_qty = st.number_input("Qty", value=safe_float(row_data.get(col_qty)), step=1.0)
+                with c4: new_prio = st.number_input("Prio", value=int(safe_float(row_data.get(col_prio)) or 1))
 
                 new_party, new_box, new_logo, new_bot = "", "", "", ""
                 if worksheet_name == "Packing":
-                    new_party = st.text_input("Party Name", row_data.get('Party Name', ''))
-                    new_box = st.text_input("Box", row_data.get('Box', ''))
-                    new_logo = st.selectbox("Logo", ["W/O Logo", "Laser", "Pad"], index=["W/O Logo", "Laser", "Pad"].index(row_data.get('Logo', 'W/O Logo')) if row_data.get('Logo') in ["W/O Logo", "Laser", "Pad"] else 0)
-                    new_bot = st.selectbox("Bottom", ["No", "Laser", "Pad"], index=["No", "Laser", "Pad"].index(row_data.get('Bottom Print', 'No')) if row_data.get('Bottom Print') in ["No", "Laser", "Pad"] else 0)
+                    new_party = st.text_input("Party", row_data.get('Party Name', ''))
+                    c5, c6, c7 = st.columns(3)
+                    with c5: new_box = st.text_input("Box", row_data.get('Box', ''))
+                    with c6: new_logo = st.selectbox("Logo", ["W/O Logo", "Laser", "Pad"], index=0)
+                    with c7: new_bot = st.selectbox("Bottom", ["No", "Laser", "Pad"], index=0)
 
-                st.markdown("---")
-                c6, c7 = st.columns(2)
-                with c6: new_ready = st.number_input("Ready Qty", value=safe_float(row_data.get('Ready Qty')), step=0.01)
-                with c7: new_status = st.selectbox("Status", ["Pending", "Next Day", "Complete"], index=["Pending", "Next Day", "Complete"].index(row_data.get('Status', 'Pending')))
+                new_rem = st.text_input("Note", row_data.get(col_rem, ''))
+                
+                st.divider()
+                c8, c9 = st.columns(2)
+                with c8: new_ready = st.number_input("Ready Qty", value=safe_float(row_data.get('Ready Qty')), step=1.0)
+                with c9: new_status = st.selectbox("Status", ["Pending", "Next Day", "Complete"], index=["Pending", "Next Day", "Complete"].index(row_data.get('Status', 'Pending')))
 
                 if st.form_submit_button("💾 Save Changes"):
                     updated_row = pd.DataFrame([row_data])
@@ -391,17 +402,16 @@ def render_edit_form(edit_idx, data, worksheet_name, date_col):
         else:
             with st.form(f"user_{worksheet_name}_update"):
                 c1, c2 = st.columns(2)
-                with c1: new_ready = st.number_input("Ready Qty", value=safe_float(row_data.get('Ready Qty')), step=0.01)
+                with c1: new_ready = st.number_input("Ready Qty", value=safe_float(row_data.get('Ready Qty')), step=1.0)
                 with c2: new_status = st.selectbox("Status", ["Pending", "Next Day", "Complete"], index=["Pending", "Next Day", "Complete"].index(row_data.get('Status', 'Pending')))
-                
-                if st.form_submit_button("✅ Update Status"):
+                if st.form_submit_button("✅ Update"):
                     updated_row = pd.DataFrame([row_data])
                     updated_row.at[edit_idx, "Ready Qty"] = new_ready
                     updated_row.at[edit_idx, "Status"] = new_status
                     updated_row["_original_idx"] = edit_idx
                     save_smart_update(data, updated_row, worksheet_name)
         
-        if st.button("❌ Close Edit"):
+        if st.button("❌ Cancel"):
             st.session_state["edit_idx"] = None
             st.rerun()
 
@@ -410,38 +420,40 @@ def render_add_task_form(data, worksheet_name):
     with st.expander(f"➕ Assign New {worksheet_name} Task", expanded=False):
         with st.form(f"new_{worksheet_name}_task"):
             if worksheet_name == "Production":
-                c1, c2, c3 = st.columns(3)
+                c1, c2 = st.columns(2)
                 with c1: n_date = st.date_input("Date")
-                with c2: n_item = st.text_input("Item Name")
-                with c3: n_qty = st.number_input("Quantity", min_value=1.0, step=0.01)
-                c4, c5 = st.columns(2)
-                with c4: n_prio = st.number_input("Priority", min_value=1, value=1)
-                with c5: n_note = st.text_input("Notes")
+                with c2: n_item = st.text_input("Item")
+                c3, c4 = st.columns(2)
+                with c3: n_qty = st.number_input("Qty", min_value=1.0, step=1.0)
+                with c4: n_prio = st.number_input("Prio", min_value=1, value=1)
+                n_note = st.text_input("Note")
 
-                if st.form_submit_button("🚀 Assign Production Task"):
-                    if not n_item: st.warning("Item Name Required")
+                if st.form_submit_button("🚀 Assign"):
+                    if not n_item: st.warning("Item Required")
                     else:
                         new_task = pd.DataFrame([{
                             "Date": str(n_date), "Item Name": n_item, "Quantity": n_qty, "Priority": n_prio, "Ready Qty": 0, "Status": "Pending", "Notes": n_note
                         }])
                         save_new_row(data, new_task, worksheet_name)
             else:
-                c1, c2, c3 = st.columns(3)
-                with c1: 
-                    n_date = st.date_input("Order Date")
-                    n_party = st.text_input("Party Name")
-                    n_logo = st.selectbox("Logo", ["W/O Logo", "Laser", "Pad"])
-                with c2:
-                    n_item = st.text_input("Item Name")
-                    n_qty = st.number_input("Order Qty", min_value=1.0, step=0.01)
-                    n_bot = st.selectbox("Bottom Print", ["No", "Laser", "Pad"])
-                with c3:
-                    n_prio = st.number_input("Priority", min_value=1, value=1)
-                    n_box = st.selectbox("Box", ["Loose", "Brown Box", "White Box", "Box"])
-                    n_rem = st.text_input("Remarks")
+                c1, c2 = st.columns(2)
+                with c1: n_date = st.date_input("Date")
+                with c2: n_party = st.text_input("Party")
+                c3, c4 = st.columns(2)
+                with c3: n_item = st.text_input("Item")
+                with c4: n_qty = st.number_input("Qty", min_value=1.0, step=1.0)
                 
-                if st.form_submit_button("🚀 Assign Packing Task"):
-                    if not n_item: st.warning("Item Name Required")
+                c5, c6, c7 = st.columns(3)
+                with c5: n_logo = st.selectbox("Logo", ["W/O Logo", "Laser", "Pad"])
+                with c6: n_bot = st.selectbox("Bottom", ["No", "Laser", "Pad"])
+                with c7: n_box = st.selectbox("Box", ["Loose", "Brown Box", "White Box", "Box"])
+                
+                c8, c9 = st.columns(2)
+                with c8: n_prio = st.number_input("Prio", min_value=1, value=1)
+                with c9: n_rem = st.text_input("Rem")
+                
+                if st.form_submit_button("🚀 Assign"):
+                    if not n_item: st.warning("Item Required")
                     else:
                         new_task = pd.DataFrame([{
                             "Date": str(date.today()), "Order Date": str(n_date), "Order Priority": n_prio, "Item Name": n_item, "Party Name": n_party, "Qty": n_qty, "Logo": n_logo, "Bottom Print": n_bot, "Box": n_box, "Remarks": n_rem, "Ready Qty": 0, "Status": "Pending"
@@ -880,9 +892,8 @@ def manage_tab(tab_name, worksheet_name):
                 g_col, p_col = st.columns([2, 1])
                 with g_col:
                     if not df_viz_filtered.empty:
-                        daily_trend = df_viz_filtered.groupby("Date")["Today's Order"].sum().reset_index()
-                        fig_line = px.line(daily_trend, x="Date", y="Today's Order", title="Order Trend", markers=True)
-                        fig_line.update_traces(line_color='#FF4B4B', line_width=3)
+                        daily_trend = df_viz_filtered.groupby(["Date", "Channel Name"])["Today's Order"].sum().reset_index()
+                        fig_line = px.line(daily_trend, x="Date", y="Today's Order", color="Channel Name", title="Channel-wise Sales Trend", markers=True)
                         st.plotly_chart(fig_line, use_container_width=True)
                     else: st.info("No data for charts")
                 with p_col:
@@ -913,7 +924,7 @@ def manage_tab(tab_name, worksheet_name):
                     c1, c2 = st.columns(2)
                     with c1:
                         date_val = st.date_input("Date")
-                        channel = st.text_input("Channel Name")
+                        channel = st.selectbox("Channel Name", ["Amazon", "Flipkart", "Meesho", "Ajio", "JioMart", "Myntra", "Aquench.in"])
                         orders = st.number_input("Today's Order", min_value=0)
                     with c2:
                         dispatch = st.number_input("Today's Dispatch", min_value=0)
@@ -939,32 +950,37 @@ else:
     with st.sidebar:
         st.write(f"👤 **{st.session_state['user']}**")
         st.caption(f"Role: {st.session_state['role']}")
+        st.markdown("---")
+        
+        # Navigation in Sidebar
+        preferred = ["Order", "Production", "Packing", "Store", "Ecommerce", "Configuration"]
+        available_tabs = [t for t in preferred if t in st.session_state["access"]]
+        
+        if available_tabs:
+            selected_nav = st.radio("Navigate", available_tabs, label_visibility="collapsed")
+        else:
+            selected_nav = None
+        
+        st.markdown("---")
         if st.button("Logout", use_container_width=True): logout()
 
-    # GLOBAL HEADER & REFRESH (Top Right)
-    c1, c2 = st.columns([1, 1]) # Tight layout
+    # MAIN CONTENT
+    c1, c2 = st.columns([5, 1])
     with c1:
-        st.title("🏭 Amavik ERP")
+        st.title(f"{selected_nav or 'Dashboard'}")
     with c2:
-        # Align button to bottom of title
-        st.write("") 
-        st.write("") 
-        if st.button("🔄 Refresh Data", key="global_refresh"):
+        st.write("")
+        if st.button("🔄 Refresh"):
             st.cache_data.clear()
             st.rerun()
-
-    # TABS NAVIGATION
-    preferred = ["Order", "Production", "Packing", "Store", "Ecommerce", "Configuration"]
-    available_tabs = [t for t in preferred if t in st.session_state["access"]]
     
-    if available_tabs:
-        tabs = st.tabs(available_tabs)
-        for tab, title in zip(tabs, available_tabs):
-            with tab:
-                if title == "Configuration":
-                    st.header("⚙️ System Configuration")
-                    st.info("Only Admin can access this area.")
-                else:
-                    manage_tab(title, title)
+    st.divider()
+
+    if selected_nav:
+        if selected_nav == "Configuration":
+            st.header("⚙️ Configuration")
+            st.info("Admin Area Only.")
+        else:
+            manage_tab(selected_nav, selected_nav)
     else:
-        st.error("No modules assigned to your role.")
+        st.error("No access.")
