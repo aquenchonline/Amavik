@@ -13,31 +13,64 @@ st.set_page_config(
     page_title="Amavik ERP", 
     layout="wide", 
     page_icon="🏭",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
-# Custom CSS for Sticky Header, Beautiful Tabs, and Responsive Mobile Sizes
+# ------------------------------------------------------------------
+# 2. UI/UX STYLING (AdminUX Inspired)
+# ------------------------------------------------------------------
 st.markdown("""
 <style>
     /* IMPORT FONT */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
+    /* GENERAL APP SETTINGS */
     html, body, [class*="css"] {
         font-family: 'Inter', sans-serif;
     }
-
-    /* --------------------------------------- */
-    /* GLOBAL STYLES                           */
-    /* --------------------------------------- */
     
-    div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column;"] > div[data-testid="stVerticalBlock"] {
-        gap: 0.5rem;
+    /* BACKGROUND COLORS */
+    .stApp {
+        background-color: #F3F6FD; /* Light Blue-Gray Background */
     }
     
-    .stButton button {
-        height: 2.2em;
-        border-radius: 6px;
+    /* SIDEBAR STYLING */
+    section[data-testid="stSidebar"] {
+        background-color: #1e293b; /* Deep Slate Navy */
+    }
+    
+    /* Sidebar Text Colors */
+    section[data-testid="stSidebar"] h1, 
+    section[data-testid="stSidebar"] h2, 
+    section[data-testid="stSidebar"] h3, 
+    section[data-testid="stSidebar"] span, 
+    section[data-testid="stSidebar"] p {
+        color: #f1f5f9 !important;
+    }
+
+    /* NAV BUTTONS (Radio) */
+    div[data-testid="stSidebar"] div.stRadio > div[role="radiogroup"] > label {
+        background-color: transparent;
+        border: none;
+        padding: 12px 20px;
+        margin-bottom: 4px;
+        color: #94a3b8; /* Muted Text */
         transition: all 0.2s;
+        border-radius: 6px;
+        font-weight: 500;
+        cursor: pointer;
+    }
+
+    div[data-testid="stSidebar"] div.stRadio > div[role="radiogroup"] > label:hover {
+        background-color: rgba(255,255,255,0.05);
+        color: #f8fafc;
+    }
+
+    div[data-testid="stSidebar"] div.stRadio > div[role="radiogroup"] > label[data-checked="true"] {
+        background-color: #3b82f6 !important; /* AdminUX Blue */
+        color: white !important;
+        font-weight: 600;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
 
     /* CARD STYLING (White Box with Shadow) */
@@ -45,11 +78,25 @@ st.markdown("""
         background-color: white;
         border-radius: 10px;
         border: 1px solid #e2e8f0;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        padding: 12px;
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+        padding: 16px;
+        margin-bottom: 10px;
+    }
+    
+    /* Remove shadow from expanders inside cards to avoid double shadow */
+    div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stVerticalBlockBorderWrapper"] {
+        box-shadow: none;
+        border: 1px solid #f0f2f6;
     }
 
-    /* Tab Styling */
+    /* BUTTONS */
+    .stButton button {
+        border-radius: 6px;
+        font-weight: 500;
+        height: 2.4em;
+    }
+
+    /* TABS */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background-color: transparent;
@@ -65,7 +112,6 @@ st.markdown("""
         padding: 4px 16px;
         color: #444;
         font-weight: 500;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
         font-size: 0.95rem; 
     }
 
@@ -77,12 +123,8 @@ st.markdown("""
         box-shadow: 0 2px 5px rgba(255, 75, 75, 0.3);
     }
 
-    /* --------------------------------------- */
-    /* MOBILE RESPONSIVE STYLES (Max Width 768px) */
-    /* --------------------------------------- */
+    /* MOBILE ADJUSTMENTS */
     @media (max-width: 768px) {
-        
-        /* Sliding Tabs */
         .stTabs [data-baseweb="tab-list"] {
             display: flex !important;
             flex-wrap: nowrap !important;   
@@ -93,9 +135,7 @@ st.markdown("""
             scrollbar-width: none; 
         }
         
-        .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar { 
-            display: none; 
-        }
+        .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar { display: none; }
 
         .stTabs [data-baseweb="tab"] {
             flex: 0 0 auto !important;      
@@ -137,7 +177,7 @@ st.markdown("""
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1S6xS6hcdKSPtzKxCL005GwvNWQNspNffNveI3P9zCgw/edit"
 
 # ------------------------------------------------------------------
-# 2. JAVASCRIPT HELPER (ENTER KEY NAVIGATION)
+# 3. JAVASCRIPT HELPER
 # ------------------------------------------------------------------
 def inject_enter_key_navigation():
     js = """
@@ -158,7 +198,7 @@ def inject_enter_key_navigation():
     components.html(js, height=0, width=0)
 
 # ------------------------------------------------------------------
-# 3. USER AUTHENTICATION DATABASE
+# 4. USER AUTHENTICATION
 # ------------------------------------------------------------------
 USERS = {
     "Production": {"pass": "Amavik@80", "role": "Production", "access": ["Production"]},
@@ -169,7 +209,7 @@ USERS = {
 }
 
 # ------------------------------------------------------------------
-# 4. SESSION STATE
+# 5. SESSION STATE
 # ------------------------------------------------------------------
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
@@ -184,7 +224,8 @@ if st.session_state["logged_in"] and st.session_state["user"] in USERS:
     st.session_state["access"] = USERS[st.session_state["user"]]["access"]
 
 def login():
-    st.title("🔒 Amavik ERP Login")
+    st.title("🔒 Amavik ERP")
+    st.markdown("### Sign In")
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
         username = st.text_input("User ID")
@@ -206,7 +247,7 @@ def logout():
     st.rerun()
 
 # ------------------------------------------------------------------
-# 5. CONNECTION & HELPERS
+# 6. CONNECTION & HELPERS
 # ------------------------------------------------------------------
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
@@ -230,8 +271,7 @@ def safe_float(val):
 def smart_format(val):
     try:
         num = float(val)
-        if num.is_integer():
-            return int(num)
+        if num.is_integer(): return int(num)
         return round(num, 2)
     except:
         return 0
@@ -240,7 +280,6 @@ def filter_by_date(df, filter_option, date_col_name="Date"):
     if df.empty: return df
     df = df.copy() 
     if date_col_name not in df.columns: return df
-    
     df["temp_date"] = pd.to_datetime(df[date_col_name], errors='coerce').dt.date
     today = date.today()
     mask = pd.Series([False] * len(df))
@@ -265,7 +304,6 @@ def save_smart_update(original_data, edited_subset, sheet_name):
             elif pd.isna(idx):
                 new_data = {col: row[col] for col in all_cols if col in row}
                 original_data = pd.concat([original_data, pd.DataFrame([new_data])], ignore_index=True)
-        
         final = original_data.drop(columns=["_original_idx"], errors='ignore')
         conn.update(spreadsheet=SHEET_URL, worksheet=sheet_name, data=final)
         st.toast("✅ Saved!", icon="💾")
@@ -303,7 +341,7 @@ def delete_task(original_data, index_to_delete, sheet_name):
         st.error(f"Error deleting: {e}")
 
 # ------------------------------------------------------------------
-# 6. SHARED CARD LOGIC (Updated for White Box Packing Style)
+# 7. COMPONENT LOGIC
 # ------------------------------------------------------------------
 def render_task_cards(df_display, date_col, role_name, data, worksheet_name):
     cols = st.columns(4)
@@ -313,9 +351,7 @@ def render_task_cards(df_display, date_col, role_name, data, worksheet_name):
             prio = smart_format(row.get('Priority') if worksheet_name == "Production" else row.get('Order Priority')) or 999
             emoji_prio = "🔴" if prio == 1 else "🟡" if prio == 2 else "🟢"
             
-            with st.container(border=True): # White box container
-                
-                # --- HEADER: Priority & Delete ---
+            with st.container(border=True):
                 c_head, c_del = st.columns([5, 1])
                 with c_head:
                     st.caption(f"{emoji_prio} Priority {prio} | {row.get(date_col, '-')}")
@@ -324,38 +360,23 @@ def render_task_cards(df_display, date_col, role_name, data, worksheet_name):
                         if st.button("❌", key=f"del_{worksheet_name}_{index}", help="Delete"):
                             delete_task(data, index, worksheet_name)
 
-                # --- 1. PACKING SPECIFIC LAYOUT ---
                 if worksheet_name == "Packing":
-                    # Party Name in BLOCK LETTERS
                     party_name = str(row.get('Party Name', '')).upper()
                     st.markdown(f"#### **{party_name}**")
-                    
-                    # Item Name
                     st.markdown(f"**{row.get('Item Name', 'Item')}**")
                     
-                    # Qty
                     qty_val = smart_format(row.get('Qty'))
                     ready_val = smart_format(row.get('Ready Qty'))
                     st.caption(f"Qty: {qty_val} | Ready: {ready_val}")
 
-                    # Status Line: Logo | Bottom | Packing
                     details = []
                     if row.get('Logo'): details.append(str(row.get('Logo')))
                     if row.get('Bottom Print'): details.append(str(row.get('Bottom Print')))
                     if row.get('Box'): details.append(str(row.get('Box')))
                     
                     if details:
-                        # Gray background pill for details
-                        st.markdown(
-                            f"""<div style='background-color:#f0f2f6; padding:4px 8px; border-radius:4px; font-size:0.8rem; color:#444; margin-bottom:8px;'>
-                            {' | '.join(details)}
-                            </div>""", 
-                            unsafe_allow_html=True
-                        )
-
-                # --- 2. PRODUCTION SPECIFIC LAYOUT ---
+                        st.markdown(f"<div style='background-color:#f0f2f6; padding:4px 8px; border-radius:4px; font-size:0.8rem; color:#444; margin-bottom:8px;'>{' | '.join(details)}</div>", unsafe_allow_html=True)
                 else: 
-                    # Standard Layout for Production
                     st.markdown(f"### **{row.get('Item Name', '')}**")
                     qty_val = smart_format(row.get('Quantity'))
                     ready_val = smart_format(row.get('Ready Qty'))
@@ -367,7 +388,6 @@ def render_task_cards(df_display, date_col, role_name, data, worksheet_name):
                     rem_key = "Notes"
                     if row.get(rem_key): st.info(f"{row[rem_key]}", icon="📝")
 
-                # Action Button
                 btn_label = "✏️ Edit" if st.session_state["role"] == "Admin" else "✅ Update"
                 if st.button(btn_label, key=f"btn_{worksheet_name}_{index}", use_container_width=True):
                     st.session_state["edit_idx"] = index
@@ -512,11 +532,13 @@ def manage_tab(tab_name, worksheet_name):
                 st.cache_data.clear()
                 st.rerun()
 
+        # 🚀 FIX: Ensure required columns exist to prevent KeyError
         if "Item Name" not in data.columns: data["Item Name"] = ""
         if "Party Name" not in data.columns: data["Party Name"] = ""
         if "Qty" not in data.columns: data["Qty"] = 0
         if "Transaction Type" not in data.columns: data["Transaction Type"] = "Order Received"
 
+        # 🚀 RENAMED TABS
         tab_log, tab_summ = st.tabs(["Order", "Summary"])
         
         with tab_log:
@@ -542,10 +564,12 @@ def manage_tab(tab_name, worksheet_name):
             st.divider()
             st.write("### 🗂️ Transaction History")
             if not data.empty:
+                # Use float for decimals
                 if "Qty" in data.columns: 
                     data["Qty"] = pd.to_numeric(data["Qty"], errors='coerce').fillna(0).astype(int)
                 if "Date" in data.columns: data["Date"] = pd.to_datetime(data["Date"], errors='coerce')
                 
+                # Show rounded in editor
                 edited_df = st.data_editor(
                     data, 
                     use_container_width=True, 
@@ -584,7 +608,11 @@ def manage_tab(tab_name, worksheet_name):
                     if "Order Received" not in base_pivot.columns: base_pivot["Order Received"] = 0
                     if "Dispatch" not in base_pivot.columns: base_pivot["Dispatch"] = 0
                     base_pivot["Pending Balance"] = base_pivot["Order Received"] - base_pivot["Dispatch"]
+                    
+                    # Round for display
                     base_pivot = base_pivot.round(2)
+                    
+                    # Convert to Int for Display
                     cols_to_int = ["Order Received", "Dispatch", "Pending Balance"]
                     for c in cols_to_int:
                         base_pivot[c] = base_pivot[c].astype(int)
@@ -605,18 +633,14 @@ def manage_tab(tab_name, worksheet_name):
     # B. PRODUCTION & PACKING
     # ===============================================================
     if worksheet_name in ["Packing", "Production"]:
-        c_title, c_ref = st.columns([8, 1])
-        with c_title: st.subheader(f"📦 {worksheet_name} Tasks")
-        with c_ref:
-            if st.button("🔄", key=f"ref_{worksheet_name}"):
-                st.cache_data.clear()
-                st.rerun()
+        st.subheader(f"📦 {worksheet_name} Tasks")
         
         if "Status" not in data.columns: data["Status"] = "Pending"
         data["Status"] = data["Status"].fillna("Pending").replace("", "Pending")
         
         if worksheet_name == "Production":
-            date_col, prio_col = "Date", "Priority"
+            date_col = "Date"
+            prio_col = "Priority"
             if "Date" not in data.columns: data["Date"] = str(date.today())
             if "Priority" not in data.columns: data["Priority"] = 999
             if "Quantity" not in data.columns: data["Quantity"] = 0
@@ -624,15 +648,19 @@ def manage_tab(tab_name, worksheet_name):
             if "Ready Qty" not in data.columns: data["Ready Qty"] = 0
             if "Notes" not in data.columns: data["Notes"] = ""
         else:
-            date_col, prio_col = "Order Date", "Order Priority"
+            date_col = "Order Date" if "Order Date" in data.columns else "Date"
+            prio_col = "Order Priority"
             if "Order Priority" not in data.columns: data["Order Priority"] = 999
             if "Qty" not in data.columns: data["Qty"] = 0
             if "Party Name" not in data.columns: data["Party Name"] = ""
             if "Item Name" not in data.columns: data["Item Name"] = ""
             if "Ready Qty" not in data.columns: data["Ready Qty"] = 0
 
-        if date_col in data.columns: data["_dt_obj"] = pd.to_datetime(data[date_col], errors='coerce').dt.date
-        else: data["_dt_obj"] = date.today()
+        # Safe date check
+        if date_col in data.columns:
+             data["_dt_obj"] = pd.to_datetime(data[date_col], errors='coerce').dt.date
+        else:
+             data["_dt_obj"] = date.today()
 
         data[prio_col] = pd.to_numeric(data[prio_col], errors='coerce').fillna(999)
 
@@ -666,147 +694,12 @@ def manage_tab(tab_name, worksheet_name):
         with st.expander("✅ View Completed History"):
             mask_complete = data["Status"] == "Complete"
             data_hist = data[mask_complete].drop(columns=["_original_idx", "_dt_obj"], errors="ignore")
+            # Force Int for History
             for c in ["Qty", "Quantity", "Ready Qty"]:
                 if c in data_hist.columns: data_hist[c] = pd.to_numeric(data_hist[c], errors='coerce').fillna(0).astype(int)
+            
             st.dataframe(data_hist, use_container_width=True)
         return
-
-    # ===============================================================
-    # C. STORE TAB LOGIC
-    # ===============================================================
-    if worksheet_name == "Store":
-        c_title, c_ref = st.columns([8, 1])
-        with c_title: st.subheader("📦 Store Management")
-        with c_ref:
-            if st.button("🔄", key="ref_store"):
-                st.cache_data.clear()
-                st.rerun()
-
-        if "Item Name" not in data.columns: data["Item Name"] = ""
-        if "Qty" not in data.columns: data["Qty"] = 0
-        if "Recvd From" not in data.columns: data["Recvd From"] = ""
-        if "Type" not in data.columns: data["Type"] = ""
-        if "Transaction Type" not in data.columns: data["Transaction Type"] = ""
-        if "Invoice No." not in data.columns: data["Invoice No."] = ""
-
-        tab_inv, tab_plan = st.tabs(["📊 Inventory Dashboard", "📅 Packing Planning"])
-
-        with tab_inv:
-            c1, c2 = st.columns([1, 3])
-            with c1: d_filter = st.selectbox("📅 Date Filter", ["All", "Today", "Yesterday", "Prev 7 Days", "This Month"], key="st_date")
-            with c2: search_query = st.text_input("🔍 Universal Search (Item, Party, Type, Inv No.)", placeholder="Type at least 3 digits to search...")
-
-            filtered_df = filter_by_date(data, d_filter, date_col_name="Date Of Entry")
-            if search_query and len(search_query) >= 3:
-                mask = (
-                    filtered_df['Item Name'].astype(str).str.contains(search_query, case=False, na=False) |
-                    filtered_df['Recvd From'].astype(str).str.contains(search_query, case=False, na=False) |
-                    filtered_df['Type'].astype(str).str.contains(search_query, case=False, na=False) |
-                    filtered_df['Transaction Type'].astype(str).str.contains(search_query, case=False, na=False) |
-                    filtered_df['Invoice No.'].astype(str).str.contains(search_query, case=False, na=False)
-                )
-                filtered_df = filtered_df[mask]
-                found_items = filtered_df['Item Name'].unique().tolist()
-                if found_items: st.caption(f"💡 **Top Suggestions:** {', '.join(found_items[:5])}")
-                else: st.warning("No matching items found.")
-
-            st.divider()
-
-            if not filtered_df.empty:
-                with st.expander("📊 Live Stock Analysis (Based on Current Search)", expanded=True):
-                    df_calc = filtered_df.copy()
-                    df_calc["Qty"] = pd.to_numeric(df_calc["Qty"], errors="coerce").fillna(0)
-                    stock_summary = []
-                    unique_items = df_calc["Item Name"].unique()
-                    for item in unique_items:
-                        item_data = df_calc[df_calc["Item Name"] == item]
-                        inward = item_data[item_data["Transaction Type"] == "Inward"]["Qty"].sum()
-                        outward = item_data[item_data["Transaction Type"] == "Outward"]["Qty"].sum()
-                        balance = inward - outward
-                        last_entry = item_data.iloc[-1]
-                        stock_summary.append({"Item Name": item, "Type": last_entry.get("Type",""), "Total Inward": inward, "Total Outward": outward, "Net Change": balance, "UOM": last_entry.get("UOM","")})
-                    
-                    df_sum_res = pd.DataFrame(stock_summary)
-                    if not df_sum_res.empty:
-                        df_sum_res = df_sum_res.round(2)
-                        st.dataframe(df_sum_res.style.highlight_between(left=0.01, right=1000000, subset=["Net Change"], color="#ffcdd2"), use_container_width=True, column_config={"Net Change": st.column_config.NumberColumn("Net Balance")})
-
-            if st.session_state["role"] == "Store":
-                st.write("### 📋 Transaction Log")
-                if filtered_df.empty: df_display = pd.DataFrame(columns=data.columns).drop(columns=["_original_idx"], errors="ignore")
-                else: df_display = filtered_df.copy()
-
-                if "Qty" in df_display.columns: df_display["Qty"] = pd.to_numeric(df_display["Qty"], errors='coerce').fillna(0)
-                if "Date Of Entry" in df_display.columns: df_display["Date Of Entry"] = pd.to_datetime(df_display["Date Of Entry"], errors='coerce')
-
-                edited_df = st.data_editor(df_display, use_container_width=True, num_rows="fixed", key="store_editor", disabled=["_original_idx"], column_config={"Qty": st.column_config.NumberColumn("Qty"), "Date Of Entry": st.column_config.DateColumn("Date Of Entry", format="YYYY-MM-DD")})
-
-                clean_view = df_display.drop(columns=["_original_idx"], errors='ignore')
-                clean_edited = edited_df.drop(columns=["_original_idx"], errors='ignore')
-                if not clean_view.equals(clean_edited):
-                    if st.button("💾 Save Changes", key="save_store"): save_smart_update(data, edited_df, worksheet_name)
-
-                st.divider()
-                with st.expander("➕ Update Stock (Add New Entry)", expanded=True):
-                    with st.form("store_form"):
-                        c1, c2, c3 = st.columns(3)
-                        with c1: date_ent = st.date_input("Date Of Entry", value=date.today())
-                        with c2: trans_type = st.selectbox("Transaction Type", ["Inward", "Outward"])
-                        with c3: qty = st.number_input("Quantity", min_value=1.0, step=0.01)
-                        c4, c5, c6 = st.columns(3)
-                        with c4: item_name = st.text_input("Item Name")
-                        with c5: uom = st.selectbox("UOM", ["Pcs", "Boxes", "Kg", "Ltr", "Set", "Packet"])
-                        with c6: i_type = st.selectbox("Type", ["Inner Box", "Outer Box", "Washer", "String", "Cap", "Bubble", "Bottle", "Other"])
-                        c7, c8, c9 = st.columns(3)
-                        with c7: recvd_from = st.text_input("Recvd From / Sent To")
-                        with c8: vendor_brand = st.text_input("Vendor Name (Brand)")
-                        with c9: invoice_no = st.text_input("Invoice No. (Inward Only)")
-
-                        if st.form_submit_button("Submit Transaction"):
-                            if not item_name: st.warning("⚠️ Item Name is required!")
-                            else:
-                                new_entry = pd.DataFrame([{"Date Of Entry": str(date_ent), "Recvd From": recvd_from, "Vendor Name(Brand)": vendor_brand, "Type": i_type, "Item Name": item_name, "Qty": qty, "UOM": uom, "Transaction Type": trans_type, "Invoice No.": invoice_no}])
-                                save_new_row(data, new_entry, worksheet_name)
-                    inject_enter_key_navigation()
-            else:
-                st.divider()
-                st.info("🚫 **Restricted Area:** Detailed Transaction Logs and Data Entry are only visible to the Store Incharge.")
-        
-        with tab_plan:
-            st.info("ℹ️ Showing Packing Orders for: **Last 7 Days & Next 5 Days**")
-            try:
-                packing_data = conn.read(spreadsheet=SHEET_URL, worksheet="Packing", ttl=0)
-                if packing_data is None or packing_data.empty: packing_data = pd.DataFrame()
-            except:
-                packing_data = pd.DataFrame()
-
-            if not packing_data.empty:
-                d_col = "Order Date" if "Order Date" in packing_data.columns else "Date"
-                packing_data["dt_obj"] = pd.to_datetime(packing_data[d_col], errors='coerce').dt.date
-                today = date.today()
-                mask_plan = (packing_data["dt_obj"] >= (today - timedelta(days=7))) & (packing_data["dt_obj"] <= (today + timedelta(days=5)))
-                plan_df = packing_data[mask_plan].copy()
-                
-                if not plan_df.empty:
-                    cols_to_show = []
-                    if d_col in plan_df.columns: cols_to_show.append(d_col)
-                    if "Party Name" in plan_df.columns: cols_to_show.append("Party Name")
-                    if "Item Name" in plan_df.columns: cols_to_show.append("Item Name")
-                    if "Qty" in plan_df.columns: cols_to_show.append("Qty")
-                    
-                    final_plan_view = plan_df[cols_to_show].copy()
-                    final_plan_view["Inner Qty Required"] = "Calculate"
-                    final_plan_view["Outer Box Required"] = "Calculate"
-                    if "Qty" in final_plan_view.columns:
-                        final_plan_view["Qty"] = pd.to_numeric(final_plan_view["Qty"], errors='coerce').fillna(0).astype(int)
-                    
-                    st.dataframe(final_plan_view, use_container_width=True, column_config={d_col: st.column_config.DateColumn("Order Date"), "Qty": st.column_config.NumberColumn("Order Qty", format="%d")})
-                else:
-                    st.info("No packing orders found in the selected date range.")
-            else:
-                st.info("Packing Sheet is empty.")
-
-        return # End Store Logic
 
     # ===============================================================
     # D. ECOMMERCE DASHBOARD LOGIC
@@ -875,6 +768,7 @@ def manage_tab(tab_name, worksheet_name):
             c_ord, c_dis, c_ret = sum_cols(df_curr)
             p_ord, p_dis, p_ret = sum_cols(df_prev)
 
+            # WRAP KPIS IN WHITE CARDS
             k1, k2, k3 = st.columns(3)
             def get_delta(curr, prev):
                 if selected_period == "All Time": return None
@@ -883,85 +777,94 @@ def manage_tab(tab_name, worksheet_name):
                 pct = round((diff / prev) * 100, 1)
                 return f"{diff} ({pct}%)"
 
-            with k1: st.metric("Total Orders", c_ord, delta=get_delta(c_ord, p_ord))
-            with k2: st.metric("Total Dispatched", c_dis, delta=get_delta(c_dis, p_dis))
-            with k3: st.metric("Total Returns", c_ret, delta=get_delta(c_ret, p_ret), delta_color="inverse")
+            with k1:
+                with st.container(border=True):
+                    st.metric("Total Orders", c_ord, delta=get_delta(c_ord, p_ord))
+            with k2:
+                with st.container(border=True):
+                    st.metric("Total Dispatched", c_dis, delta=get_delta(c_dis, p_dis))
+            with k3:
+                with st.container(border=True):
+                    st.metric("Total Returns", c_ret, delta=get_delta(c_ret, p_ret), delta_color="inverse")
 
         st.divider()
 
-        st.subheader("📈 Visual Trends")
-        if not data.empty:
-            df_viz = data.copy()
-            df_viz["Date"] = pd.to_datetime(df_viz["Date"], errors='coerce')
-            df_viz["Today's Order"] = pd.to_numeric(df_viz["Today's Order"], errors='coerce').fillna(0)
-            today = date.today()
-            default_start = today - timedelta(days=10)
-            c_range, _ = st.columns([1, 2])
-            with c_range: date_range = st.date_input("Chart Date Range", value=(default_start, today), key="viz_range")
+        # CHART SECTION (WHITE CARD)
+        with st.container(border=True):
+            st.markdown("### 📈 Visual Trends")
+            if not data.empty:
+                df_viz = data.copy()
+                df_viz["Date"] = pd.to_datetime(df_viz["Date"], errors='coerce')
+                df_viz["Today's Order"] = pd.to_numeric(df_viz["Today's Order"], errors='coerce').fillna(0)
+                today = date.today()
+                default_start = today - timedelta(days=10)
+                c_range, _ = st.columns([1, 2])
+                with c_range: date_range = st.date_input("Chart Date Range", value=(default_start, today), key="viz_range")
 
-            if isinstance(date_range, tuple) and len(date_range) == 2:
-                start_d, end_d = date_range
-                mask_viz = (df_viz["Date"].dt.date >= start_d) & (df_viz["Date"].dt.date <= end_d)
-                df_viz_filtered = df_viz[mask_viz]
-                g_col, p_col = st.columns([2, 1])
-                with g_col:
-                    if not df_viz_filtered.empty:
-                        daily_trend = df_viz_filtered.groupby(["Date", "Channel Name"])["Today's Order"].sum().reset_index()
-                        fig_line = px.line(daily_trend, x="Date", y="Today's Order", color="Channel Name", title="Channel-wise Sales Trend", markers=True)
-                        st.plotly_chart(fig_line, use_container_width=True)
-                    else: st.info("No data for charts")
-                with p_col:
-                    if not df_viz_filtered.empty and "Channel Name" in df_viz_filtered.columns:
-                        channel_dist = df_viz_filtered.groupby("Channel Name")["Today's Order"].sum().reset_index()
-                        fig_pie = px.pie(channel_dist, values="Today's Order", names="Channel Name", title="Channel Share", hole=0.4)
-                        st.plotly_chart(fig_pie, use_container_width=True)
+                if isinstance(date_range, tuple) and len(date_range) == 2:
+                    start_d, end_d = date_range
+                    mask_viz = (df_viz["Date"].dt.date >= start_d) & (df_viz["Date"].dt.date <= end_d)
+                    df_viz_filtered = df_viz[mask_viz]
+                    
+                    g_col, p_col = st.columns([2, 1])
+                    with g_col:
+                        if not df_viz_filtered.empty:
+                            daily_trend = df_viz_filtered.groupby(["Date", "Channel Name"])["Today's Order"].sum().reset_index()
+                            fig_line = px.line(daily_trend, x="Date", y="Today's Order", color="Channel Name", title="Channel-wise Sales Trend", markers=True)
+                            st.plotly_chart(fig_line, use_container_width=True)
+                        else: st.info("No data for charts")
+                    with p_col:
+                        if not df_viz_filtered.empty and "Channel Name" in df_viz_filtered.columns:
+                            channel_dist = df_viz_filtered.groupby("Channel Name")["Today's Order"].sum().reset_index()
+                            fig_pie = px.pie(channel_dist, values="Today's Order", names="Channel Name", title="Channel Share", hole=0.4)
+                            st.plotly_chart(fig_pie, use_container_width=True)
 
         st.divider()
 
-        st.write("### 📋 Detailed Logs")
-        if df_curr.empty:
-            display_df = pd.DataFrame(columns=data.columns).drop(columns=["dt"], errors="ignore") if not data.empty else pd.DataFrame()
-        else:
-            display_df = df_curr.drop(columns=["dt"], errors="ignore")
+        # LOGS SECTION (WHITE CARD)
+        with st.container(border=True):
+            st.write("### 📋 Detailed Logs")
+            if df_curr.empty:
+                display_df = pd.DataFrame(columns=data.columns).drop(columns=["dt"], errors="ignore") if not data.empty else pd.DataFrame()
+            else:
+                display_df = df_curr.drop(columns=["dt"], errors="ignore")
 
-        is_editable = (st.session_state["role"] == "Ecommerce")
-        if is_editable:
-            cols_to_int_ecom = ["Today's Order", "Today's Dispatch", "Return"]
-            for c in cols_to_int_ecom:
-                if c in display_df.columns:
-                    display_df[c] = pd.to_numeric(display_df[c], errors='coerce').fillna(0).astype(int)
+            is_editable = (st.session_state["role"] == "Ecommerce")
+            if is_editable:
+                cols_to_int_ecom = ["Today's Order", "Today's Dispatch", "Return"]
+                for c in cols_to_int_ecom:
+                    if c in display_df.columns:
+                        display_df[c] = pd.to_numeric(display_df[c], errors='coerce').fillna(0).astype(int)
 
-            edited_df = st.data_editor(display_df, use_container_width=True, num_rows="fixed", key="eco_editor", disabled=["_original_idx"], column_config={
-                "Today's Order": st.column_config.NumberColumn("Orders", format="%d"),
-                "Today's Dispatch": st.column_config.NumberColumn("Dispatch", format="%d"),
-                "Return": st.column_config.NumberColumn("Return", format="%d")
-            })
-            clean_view = display_df.drop(columns=["_original_idx"], errors='ignore')
-            clean_edited = edited_df.drop(columns=["_original_idx"], errors='ignore')
-            if not clean_view.equals(clean_edited):
-                if st.button("💾 Save Table Changes"): save_smart_update(data, edited_df, worksheet_name)
-            
-            st.divider()
-            with st.expander("➕ Add New Ecommerce Entry"):
-                with st.form("eco_form"):
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        date_val = st.date_input("Date")
-                        channel = st.selectbox("Channel Name", ["Amazon", "Flipkart", "Meesho", "Ajio", "JioMart", "Myntra", "Aquench.in"])
-                        orders = st.number_input("Today's Order", min_value=0)
-                    with c2:
-                        dispatch = st.number_input("Today's Dispatch", min_value=0)
-                        ret = st.number_input("Return", min_value=0)
-                    if st.form_submit_button("Add Record"):
-                        if not channel: st.warning("Channel Name Required")
-                        else:
+                edited_df = st.data_editor(display_df, use_container_width=True, num_rows="fixed", key="eco_editor", disabled=["_original_idx"], column_config={
+                    "Today's Order": st.column_config.NumberColumn("Orders", format="%d"),
+                    "Today's Dispatch": st.column_config.NumberColumn("Dispatch", format="%d"),
+                    "Return": st.column_config.NumberColumn("Return", format="%d")
+                })
+                clean_view = display_df.drop(columns=["_original_idx"], errors='ignore')
+                clean_edited = edited_df.drop(columns=["_original_idx"], errors='ignore')
+                if not clean_view.equals(clean_edited):
+                    if st.button("💾 Save Table Changes"): save_smart_update(data, edited_df, worksheet_name)
+                
+                st.divider()
+                with st.expander("➕ Add New Ecommerce Entry"):
+                    with st.form("eco_form"):
+                        c1, c2 = st.columns(2)
+                        with c1:
+                            date_val = st.date_input("Date")
+                            channel = st.selectbox("Channel Name", ["Amazon", "Flipkart", "Meesho", "Ajio", "JioMart", "Myntra", "Aquench.in"])
+                            orders = st.number_input("Today's Order", min_value=0)
+                        with c2:
+                            dispatch = st.number_input("Today's Dispatch", min_value=0)
+                            ret = st.number_input("Return", min_value=0)
+                        if st.form_submit_button("Add Record"):
                             new_row = pd.DataFrame([{"Date": str(date_val), "Channel Name": channel, "Today's Order": orders, "Today's Dispatch": dispatch, "Return": ret}])
                             save_new_row(data, new_row, worksheet_name)
-                    
-                    inject_enter_key_navigation()
-        else:
-            st.info("ℹ️ Read-Only View (Admin Access)")
-            st.dataframe(display_df.drop(columns=["_original_idx"], errors='ignore'), use_container_width=True)
+                        
+                        inject_enter_key_navigation()
+            else:
+                st.info("ℹ️ Read-Only View (Admin Access)")
+                st.dataframe(display_df.drop(columns=["_original_idx"], errors='ignore'), use_container_width=True)
         return
 
 # ------------------------------------------------------------------
@@ -971,24 +874,20 @@ if not st.session_state["logged_in"]:
     login()
 else:
     with st.sidebar:
-        # User Profile Header
         st.write(f"👤 **{st.session_state['user']}**")
         st.caption(f"Role: {st.session_state['role']}")
         if st.button("Logout", use_container_width=True): logout()
 
-    # GLOBAL HEADER & REFRESH (Top Right)
     c1, c2 = st.columns([1, 1]) # Tight layout
     with c1:
         st.title("🏭 Amavik ERP")
     with c2:
-        # Align button to bottom of title
         st.write("") 
         st.write("") 
         if st.button("🔄 Refresh Data", key="global_refresh"):
             st.cache_data.clear()
             st.rerun()
 
-    # TABS NAVIGATION
     preferred = ["Order", "Production", "Packing", "Store", "Ecommerce", "Configuration"]
     available_tabs = [t for t in preferred if t in st.session_state["access"]]
     
