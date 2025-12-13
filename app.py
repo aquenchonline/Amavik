@@ -72,11 +72,12 @@ st.markdown("""
     /* --------------------------------------- */
     @media (max-width: 768px) {
         
-        /* 1. Make Tabs Smaller & Scrollable */
+        /* 1. Make Tabs Much Smaller for Mobile */
         .stTabs [data-baseweb="tab"] {
-            font-size: 0.8rem;
-            padding: 4px 8px;
-            height: 35px;
+            font-size: 0.6rem !important;  /* Tiny Font */
+            padding: 2px 4px !important;   /* Very Tight Padding */
+            height: 30px !important;
+            min-width: auto !important;
         }
 
         /* 2. Reduce Text Size */
@@ -102,8 +103,6 @@ st.markdown("""
         h3 { font-size: 1.1rem !important; }
         
         /* 6. FORCE 2 CARDS PER ROW Logic */
-        /* Streamlit stacks columns by default on mobile (100% width). 
-           We force them to 50% width so 2 cards fit side-by-side. */
         div[data-testid="column"] {
             width: 50% !important;
             flex: 0 0 50% !important;
@@ -139,7 +138,6 @@ def inject_enter_key_navigation():
 # ------------------------------------------------------------------
 # 3. USER AUTHENTICATION DATABASE
 # ------------------------------------------------------------------
-# 🚀 UPDATED: Removed "Order" from Store, Added to Ecommerce
 USERS = {
     "Production": {"pass": "Amavik@80", "role": "Production", "access": ["Production"]},
     "Packing":    {"pass": "Amavik@97", "role": "Packing",    "access": ["Packing"]},
