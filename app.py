@@ -5,43 +5,65 @@ import pandas as pd
 import plotly.express as px
 import time
 from datetime import date, timedelta, datetime
-import numpy as np
 
 # ------------------------------------------------------------------
-# 1. PAGE CONFIGURATION
+# 1. PAGE CONFIGURATION & STYLING
 # ------------------------------------------------------------------
 st.set_page_config(
-    page_title="ERP System", 
+    page_title="Amavik ERP", 
     layout="wide", 
     page_icon="🏭",
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS
+# Custom CSS for "Beautiful" Tabs and Spacing
 st.markdown("""
 <style>
+    /* Global Spacing */
     div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column;"] > div[data-testid="stVerticalBlock"] {
         gap: 0.5rem;
     }
+    
+    /* Button Styling */
     .stButton button {
-        height: 2em;
-        padding-top: 0;
-        padding-bottom: 0;
+        height: 2.2em;
+        border-radius: 5px;
     }
+
+    /* CLEANER TAB STYLING (Pill/Button Look) */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 10px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        white-space: pre-wrap;
-        background-color: #f0f2f6;
-        border-radius: 4px 4px 0px 0px;
-        padding-top: 10px;
+        gap: 8px;
+        background-color: transparent;
         padding-bottom: 10px;
     }
+
+    .stTabs [data-baseweb="tab"] {
+        height: 40px;
+        white-space: pre-wrap;
+        background-color: #f8f9fa; /* Light Gray Background */
+        border-radius: 8px; /* Rounded Corners */
+        border: 1px solid #e0e0e0;
+        padding: 4px 16px;
+        color: #444;
+        font-weight: 500;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        transition: all 0.2s ease;
+    }
+
+    /* Selected Tab Style */
     .stTabs [aria-selected="true"] {
-        background-color: #ffffff;
-        border-bottom: 2px solid #ff4b4b;
+        background-color: #FF4B4B; /* Amavik/Streamlit Red */
+        color: white !important;
+        border: 1px solid #FF4B4B;
+        font-weight: 600;
+        box-shadow: 0 2px 5px rgba(255, 75, 75, 0.3);
+    }
+
+    /* Hover Effect */
+    .stTabs [data-baseweb="tab"]:hover {
+        background-color: #fff;
+        border-color: #FF4B4B;
+        color: #FF4B4B;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -49,7 +71,7 @@ st.markdown("""
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1S6xS6hcdKSPtzKxCL005GwvNWQNspNffNveI3P9zCgw/edit"
 
 # ------------------------------------------------------------------
-# 2. JAVASCRIPT HELPER
+# 2. JAVASCRIPT HELPER (ENTER KEY NAVIGATION)
 # ------------------------------------------------------------------
 def inject_enter_key_navigation():
     js = """
@@ -91,11 +113,12 @@ if "logged_in" not in st.session_state:
 if "edit_idx" not in st.session_state:
     st.session_state["edit_idx"] = None 
 
+# Permission Sync
 if st.session_state["logged_in"] and st.session_state["user"] in USERS:
     st.session_state["access"] = USERS[st.session_state["user"]]["access"]
 
 def login():
-    st.title("🔒 ERP Secure Login")
+    st.title("🔒 Amavik ERP Login")
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
         username = st.text_input("User ID")
@@ -125,13 +148,10 @@ except Exception as e:
     st.error(f"🚨 Connection Error: {e}")
     st.stop()
 
-# 👇 SMART FORMATTER: Int if whole number, else 2 decimals
-def smart_format(val):
+def safe_int(val):
     try:
-        num = float(val)
-        if num.is_integer():
-            return int(num)
-        return round(num, 2)
+        num = pd.to_numeric(val, errors='coerce')
+        return int(num) if pd.notna(num) else 0
     except:
         return 0
 
@@ -141,10 +161,20 @@ def safe_float(val):
     except:
         return 0.0
 
+def smart_format(val):
+    try:
+        num = float(val)
+        if num.is_integer():
+            return int(num)
+        return round(num, 2)
+    except:
+        return 0
+
 def filter_by_date(df, filter_option, date_col_name="Date"):
     if df.empty: return df
     df = df.copy() 
     if date_col_name not in df.columns: return df
+    
     df["temp_date"] = pd.to_datetime(df[date_col_name], errors='coerce').dt.date
     today = date.today()
     mask = pd.Series([False] * len(df))
@@ -391,12 +421,13 @@ def manage_tab(tab_name, worksheet_name):
                 st.cache_data.clear()
                 st.rerun()
 
+        # 🚀 FIX: Ensure required columns exist
         if "Item Name" not in data.columns: data["Item Name"] = ""
         if "Party Name" not in data.columns: data["Party Name"] = ""
         if "Qty" not in data.columns: data["Qty"] = 0
         if "Transaction Type" not in data.columns: data["Transaction Type"] = "Order Received"
 
-        tab_log, tab_summ = st.tabs(["📝 Order/Dispatch Logs (Entry)", "📊 Pending Orders Summary"])
+        tab_log, tab_summ = st.tabs(["📝 Order Logs (Entry)", "📊 Pending Summary"])
         
         with tab_log:
             with st.expander("➕ Add New Order / Dispatch", expanded=True):
@@ -473,10 +504,10 @@ def manage_tab(tab_name, worksheet_name):
                         matrix = base_pivot.pivot_table(index="Item Name", columns="Party Name", values="Pending Balance", aggfunc="sum", fill_value=0, margins=True, margins_name="Total")
                         st.dataframe(matrix.style.highlight_between(left=0.01, right=1000000, color="#ffcdd2"), use_container_width=True)
                     elif view_mode == "Party-wise Summary":
-                        st.dataframe(base_pivot.sort_values(by="Party Name").style.highlight_between(left=0.01, right=1000000, subset=["Pending Balance"], color="#ffcdd2"), use_container_width=True)
+                        st.dataframe(base_pivot.sort_values(by="Party Name").style.highlight_between(left=0.01, right=1000000, subset=["Pending Balance"], color="#ffcdd2"), use_container_width=True, column_config={"Pending Balance": st.column_config.NumberColumn("Pending")})
                     else:
                         item_pivot = base_pivot.sort_values(by="Item Name")[["Item Name", "Party Name", "Order Received", "Dispatch", "Pending Balance"]]
-                        st.dataframe(item_pivot.style.highlight_between(left=0.01, right=1000000, subset=["Pending Balance"], color="#ffcdd2"), use_container_width=True)
+                        st.dataframe(item_pivot.style.highlight_between(left=0.01, right=1000000, subset=["Pending Balance"], color="#ffcdd2"), use_container_width=True, column_config={"Pending Balance": st.column_config.NumberColumn("Pending")})
                 else: st.warning("No data matches your search.")
             else: st.info("No Order data available.")
         return 
@@ -856,7 +887,7 @@ else:
         st.caption(f"Role: {st.session_state['role']}")
         if st.button("Logout", use_container_width=True): logout()
 
-    st.title("🏭 ERP System")
+    st.title("🏭 Amavik ERP")
     
     # Sort order
     preferred = ["Order", "Production", "Packing", "Store", "Ecommerce", "Configuration"]
