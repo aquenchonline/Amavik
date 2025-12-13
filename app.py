@@ -16,21 +16,24 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS for "Beautiful" Tabs and Spacing
+# Custom CSS for "Beautiful" Tabs, Spacing AND Responsive Mobile Sizes
 st.markdown("""
 <style>
-    /* Global Spacing */
+    /* --------------------------------------- */
+    /* GLOBAL DESKTOP STYLES (Default)         */
+    /* --------------------------------------- */
+    
     div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column;"] > div[data-testid="stVerticalBlock"] {
         gap: 0.5rem;
     }
     
-    /* Button Styling */
     .stButton button {
         height: 2.2em;
         border-radius: 5px;
+        transition: all 0.2s;
     }
 
-    /* CLEANER TAB STYLING (Pill/Button Look) */
+    /* Tab Styling (Desktop) */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background-color: transparent;
@@ -40,30 +43,68 @@ st.markdown("""
     .stTabs [data-baseweb="tab"] {
         height: 40px;
         white-space: pre-wrap;
-        background-color: #f8f9fa; /* Light Gray Background */
-        border-radius: 8px; /* Rounded Corners */
+        background-color: #f8f9fa;
+        border-radius: 8px;
         border: 1px solid #e0e0e0;
         padding: 4px 16px;
         color: #444;
         font-weight: 500;
         box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-        transition: all 0.2s ease;
+        font-size: 1rem; /* Default Desktop Size */
     }
 
-    /* Selected Tab Style */
     .stTabs [aria-selected="true"] {
-        background-color: #FF4B4B; /* Amavik/Streamlit Red */
+        background-color: #FF4B4B;
         color: white !important;
         border: 1px solid #FF4B4B;
         font-weight: 600;
         box-shadow: 0 2px 5px rgba(255, 75, 75, 0.3);
     }
 
-    /* Hover Effect */
     .stTabs [data-baseweb="tab"]:hover {
         background-color: #fff;
         border-color: #FF4B4B;
         color: #FF4B4B;
+    }
+
+    /* --------------------------------------- */
+    /* MOBILE RESPONSIVE STYLES (Max Width 768px) */
+    /* --------------------------------------- */
+    @media (max-width: 768px) {
+        
+        /* 1. Make Tabs Smaller & Scrollable */
+        .stTabs [data-baseweb="tab"] {
+            font-size: 0.8rem;  /* Smaller Font */
+            padding: 4px 8px;   /* Tighter Padding */
+            height: 35px;
+        }
+
+        /* 2. Reduce Text Size in Cards & Body */
+        p, .stMarkdown, div[data-testid="stMarkdownContainer"] p {
+            font-size: 0.9rem !important;
+        }
+        
+        /* 3. Make Metric Numbers Smaller */
+        div[data-testid="stMetricValue"] {
+            font-size: 1.4rem !important;
+        }
+        
+        /* 4. Tighter Buttons */
+        .stButton button {
+            font-size: 0.85rem;
+            padding-left: 0.5rem;
+            padding-right: 0.5rem;
+        }
+        
+        /* 5. Reduce Header Sizes */
+        h1 { font-size: 1.8rem !important; }
+        h2 { font-size: 1.5rem !important; }
+        h3 { font-size: 1.2rem !important; }
+        
+        /* 6. Adjust Card Container Padding */
+        div[data-testid="stVerticalBlock"] {
+            gap: 0.3rem !important;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -427,7 +468,7 @@ def manage_tab(tab_name, worksheet_name):
         if "Qty" not in data.columns: data["Qty"] = 0
         if "Transaction Type" not in data.columns: data["Transaction Type"] = "Order Received"
 
-        tab_log, tab_summ = st.tabs(["📝 Order Logs (Entry)", "📊 Pending Summary"])
+        tab_log, tab_summ = st.tabs(["📝 Order/Dispatch Logs (Entry)", "📊 Pending Summary"])
         
         with tab_log:
             with st.expander("➕ Add New Order / Dispatch", expanded=True):
