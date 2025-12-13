@@ -74,10 +74,10 @@ st.markdown("""
     }
 
     /* ============================================================ */
-    /* 🚀 FORCE WHITE CARDS - THE FIX IS HERE                      */
+    /* 🚀 FORCE WHITE CARDS - PACKING & PRODUCTION CARDS           */
     /* ============================================================ */
     
-    /* 1. Target st.container(border=True) used in Packing/Production/Charts/Logs */
+    /* 1. Target st.container(border=True) */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background-color: #ffffff !important;  /* Force Pure White */
         border: 1px solid #e2e8f0 !important;
@@ -375,6 +375,7 @@ def render_task_cards(df_display, date_col, role_name, data, worksheet_name):
             prio = smart_format(row.get('Priority') if worksheet_name == "Production" else row.get('Order Priority')) or 999
             emoji_prio = "🔴" if prio == 1 else "🟡" if prio == 2 else "🟢"
             
+            # THE CARD CONTAINER (WHITE)
             with st.container(border=True):
                 c_head, c_del = st.columns([5, 1])
                 with c_head:
@@ -931,7 +932,6 @@ def manage_tab(tab_name, worksheet_name):
             c_ord, c_dis, c_ret = sum_cols(df_curr)
             p_ord, p_dis, p_ret = sum_cols(df_prev)
 
-            # WRAP KPIS IN WHITE CARDS
             k1, k2, k3 = st.columns(3)
             def get_delta(curr, prev):
                 if selected_period == "All Time": return None
@@ -941,15 +941,17 @@ def manage_tab(tab_name, worksheet_name):
                 return f"{diff} ({pct}%)"
 
             with k1:
-                st.metric("Total Orders", c_ord, delta=get_delta(c_ord, p_ord))
+                with st.container(border=True):
+                    st.metric("Total Orders", c_ord, delta=get_delta(c_ord, p_ord))
             with k2:
-                st.metric("Total Dispatched", c_dis, delta=get_delta(c_dis, p_dis))
+                with st.container(border=True):
+                    st.metric("Total Dispatched", c_dis, delta=get_delta(c_dis, p_dis))
             with k3:
-                st.metric("Total Returns", c_ret, delta=get_delta(c_ret, p_ret), delta_color="inverse")
+                with st.container(border=True):
+                    st.metric("Total Returns", c_ret, delta=get_delta(c_ret, p_ret), delta_color="inverse")
 
         st.divider()
 
-        # CHART SECTION (WHITE CARD)
         with st.container(border=True):
             st.markdown("### 📈 Visual Trends")
             if not data.empty:
@@ -981,7 +983,6 @@ def manage_tab(tab_name, worksheet_name):
 
         st.divider()
 
-        # LOGS SECTION (WHITE CARD)
         with st.container(border=True):
             st.write("### 📋 Detailed Logs")
             if df_curr.empty:
