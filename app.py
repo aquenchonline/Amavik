@@ -17,7 +17,7 @@ st.set_page_config(
 )
 
 # ------------------------------------------------------------------
-# 2. UI/UX STYLING (Light Sidebar + White Cards)
+# 2. UI/UX STYLING (Blue Theme Restored + White Cards)
 # ------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -34,13 +34,15 @@ st.markdown("""
         background-color: #F3F6FD; /* Light Blue-Gray Background */
     }
     
-    /* SIDEBAR STYLING */
+    /* ======================================= */
+    /* SIDEBAR STYLING (BLUE THEME RESTORED)   */
+    /* ======================================= */
     section[data-testid="stSidebar"] {
         background-color: #FFFFFF; /* White Sidebar */
         border-right: 1px solid #E6EAF1;
     }
     
-    /* Sidebar Text Colors */
+    /* Sidebar Text Colors (Dark) */
     section[data-testid="stSidebar"] h1, 
     section[data-testid="stSidebar"] h2, 
     section[data-testid="stSidebar"] h3, 
@@ -55,30 +57,33 @@ st.markdown("""
         border: 1px solid #E2E8F0;
         padding: 12px 20px;
         margin-bottom: 6px;
-        color: #475569 !important; /* Slate Gray Text */
+        color: #64748B !important; /* Slate Gray Text */
         transition: all 0.2s ease-in-out;
         border-radius: 8px;
         font-weight: 500;
         cursor: pointer;
     }
 
+    /* Hover State (Light Blue) */
     div[data-testid="stSidebar"] div.stRadio > div[role="radiogroup"] > label:hover {
-        background-color: #111C43 !important; /* Deep Blue Background */
-        color: #FFFFFF !important; /* White Text */
-        border-color: #111C43;
+        background-color: #EFF6FF !important; /* Light Blue BG */
+        color: #5D87FF !important; /* Blue Text */
+        border-color: #5D87FF;
     }
 
+    /* Selected Tab (THE BLUE YOU LIKED) */
     div[data-testid="stSidebar"] div.stRadio > div[role="radiogroup"] > label[data-checked="true"] {
-        background-color: #FF8C00 !important; /* Orange Background */
+        background-color: #5D87FF !important; /* Excellent Blue */
         color: white !important;
-        border-color: #FF8C00;
+        border-color: #5D87FF;
         font-weight: 600;
-        box-shadow: 0 4px 6px -1px rgba(255, 140, 0, 0.3);
+        box-shadow: 0 4px 10px rgba(93, 135, 255, 0.3);
     }
+    /* ======================================= */
 
     /* CARD STYLING (FORCING WHITE BOX) */
     div[data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #ffffff !important;  
+        background-color: #ffffff !important;  /* Force Pure White */
         border: 1px solid #e2e8f0 !important;
         border-radius: 10px !important;
         box-shadow: 0 2px 4px 0 rgba(0,0,0,0.05) !important;
@@ -100,9 +105,18 @@ st.markdown("""
         padding: 16px !important;
     }
 
-    div[data-testid="stVerticalBlockBorderWrapper"] *,
-    div[data-testid="stMetric"] * {
-        color: #1e293b; 
+    /* Text Colors inside Cards */
+    div[data-testid="stVerticalBlockBorderWrapper"] h1,
+    div[data-testid="stVerticalBlockBorderWrapper"] h2,
+    div[data-testid="stVerticalBlockBorderWrapper"] h3,
+    div[data-testid="stVerticalBlockBorderWrapper"] h4 {
+        color: #111C43 !important; /* Navy Blue Headers */
+    }
+    
+    div[data-testid="stVerticalBlockBorderWrapper"] p,
+    div[data-testid="stVerticalBlockBorderWrapper"] span,
+    div[data-testid="stVerticalBlockBorderWrapper"] div {
+        color: #334155; /* Dark Slate Body */
     }
 
     /* BUTTONS */
@@ -110,6 +124,12 @@ st.markdown("""
         border-radius: 6px;
         font-weight: 500;
         height: 2.4em;
+        background-color: #5D87FF; /* Blue Buttons */
+        color: white;
+        border: none;
+    }
+    .stButton button:hover {
+        background-color: #4570EA;
     }
 
     /* TABS */
@@ -132,11 +152,11 @@ st.markdown("""
     }
 
     .stTabs [aria-selected="true"] {
-        background-color: #FF4B4B !important;
+        background-color: #5D87FF !important; /* Blue Active Tab */
         color: white !important;
-        border: 1px solid #FF4B4B;
+        border: 1px solid #5D87FF;
         font-weight: 600;
-        box-shadow: 0 2px 5px rgba(255, 75, 75, 0.3);
+        box-shadow: 0 2px 5px rgba(93, 135, 255, 0.3);
     }
 
     /* MOBILE ADJUSTMENTS */
@@ -162,21 +182,27 @@ st.markdown("""
             min-width: auto !important;
             text-align: center;
         }
+
+        /* 2 Cards per Row Logic */
         div[data-testid="column"] {
             width: 50% !important;
             flex: 0 0 50% !important;
             min-width: 50% !important;
         }
+
         p, .stMarkdown, div[data-testid="stMarkdownContainer"] p {
             font-size: 0.85rem !important;
         }
+        
         div[data-testid="stMetricValue"] {
             font-size: 1.2rem !important;
         }
+        
         .stButton button {
             font-size: 0.8rem;
             padding: 0 5px;
         }
+        
         h1 { font-size: 1.5rem !important; }
         h2 { font-size: 1.3rem !important; }
         h3 { font-size: 1.1rem !important; }
@@ -229,6 +255,7 @@ if "logged_in" not in st.session_state:
 if "edit_idx" not in st.session_state:
     st.session_state["edit_idx"] = None 
 
+# Permission Sync
 if st.session_state["logged_in"] and st.session_state["user"] in USERS:
     st.session_state["access"] = USERS[st.session_state["user"]]["access"]
 
@@ -268,19 +295,24 @@ def safe_int(val):
     try:
         num = pd.to_numeric(val, errors='coerce')
         return int(num) if pd.notna(num) else 0
-    except: return 0
+    except:
+        return 0
 
 def safe_float(val):
     try:
         return float(pd.to_numeric(val, errors='coerce') or 0.0)
-    except: return 0.0
+    except:
+        return 0.0
 
+# 🧠 SMART FORMATTING: 10.0 -> 10, 10.5 -> 10.5, 10.567 -> 10.57
 def smart_format(val):
     try:
         num = float(val)
-        if num.is_integer(): return int(num)
+        if num.is_integer():
+            return int(num)
         return round(num, 2)
-    except: return 0
+    except:
+        return 0
 
 def filter_by_date(df, filter_option, date_col_name="Date"):
     if df.empty: return df
@@ -317,7 +349,8 @@ def save_smart_update(original_data, edited_subset, sheet_name):
         st.cache_data.clear()
         time.sleep(1)
         st.rerun()
-    except Exception as e: st.error(f"Error saving data: {e}")
+    except Exception as e:
+        st.error(f"Error saving data: {e}")
 
 def save_new_row(original_data, new_row_df, sheet_name):
     try:
@@ -328,7 +361,8 @@ def save_new_row(original_data, new_row_df, sheet_name):
         st.cache_data.clear()
         time.sleep(1)
         st.rerun()
-    except Exception as e: st.error(f"Error adding row: {e}")
+    except Exception as e:
+        st.error(f"Error adding row: {e}")
 
 def delete_task(original_data, index_to_delete, sheet_name):
     try:
@@ -341,7 +375,8 @@ def delete_task(original_data, index_to_delete, sheet_name):
             st.cache_data.clear()
             time.sleep(1)
             st.rerun()
-    except Exception as e: st.error(f"Error deleting: {e}")
+    except Exception as e:
+        st.error(f"Error deleting: {e}")
 
 # ------------------------------------------------------------------
 # 7. COMPONENT LOGIC
@@ -378,7 +413,7 @@ def render_task_cards(df_display, date_col, role_name, data, worksheet_name):
                     if row.get('Box'): details.append(str(row.get('Box')))
                     
                     if details:
-                        st.markdown(f"<div style='background-color:#f0f2f6; padding:4px 8px; border-radius:4px; font-size:0.8rem; color:#444; margin-bottom:8px;'>{' | '.join(details)}</div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='background-color:#F4F7FE; padding:4px 8px; border-radius:4px; font-size:0.75rem; color:#5D87FF; font-weight:600; text-align:center; margin-top:10px;'>{' | '.join(details)}</div>", unsafe_allow_html=True)
                 else: 
                     st.markdown(f"### **{row.get('Item Name', '')}**")
                     qty_val = smart_format(row.get('Quantity'))
@@ -555,6 +590,7 @@ def manage_tab(tab_name, worksheet_name):
                 if "Date" in data.columns: data["Date"] = pd.to_datetime(data["Date"], errors='coerce')
                 
                 edited_df = st.data_editor(data, use_container_width=True, num_rows="fixed", key="order_editor", disabled=["_original_idx"], column_config={"Date": st.column_config.DateColumn("Date", format="YYYY-MM-DD"), "Qty": st.column_config.NumberColumn("Qty", format="%d"), "Transaction Type": st.column_config.SelectboxColumn("Type", options=["Order Received", "Dispatch"])})
+                
                 clean_view = data.drop(columns=["_original_idx"], errors='ignore')
                 clean_edited = edited_df.drop(columns=["_original_idx"], errors='ignore')
                 if not clean_view.equals(clean_edited):
@@ -686,8 +722,9 @@ def manage_tab(tab_name, worksheet_name):
                     df_calc["Qty"] = pd.to_numeric(df_calc["Qty"], errors="coerce").fillna(0)
                     stock_summary = df_calc.groupby("Item Name").apply(lambda x: pd.Series({"Inward": x[x["Transaction Type"] == "Inward"]["Qty"].sum(), "Outward": x[x["Transaction Type"] == "Outward"]["Qty"].sum()})).reset_index()
                     stock_summary["Balance"] = stock_summary["Inward"] - stock_summary["Outward"]
-                    # Store 2 decimal
-                    st.dataframe(stock_summary.round(2).style.highlight_between(left=0.01, right=1000000, subset=["Balance"], color="#ffcdd2"), use_container_width=True, column_config={"Balance": st.column_config.NumberColumn("Net Balance", format="%.2f")})
+                    # Store Logic: 10.5 -> 10.5, 10.0 -> 10 (No forced 2 decimals)
+                    # We render this using default Streamlit behavior (which is smart about int/float)
+                    st.dataframe(stock_summary.style.highlight_between(left=0.01, right=1000000, subset=["Balance"], color="#ffcdd2"), use_container_width=True, column_config={"Balance": st.column_config.NumberColumn("Net Balance")})
 
             if st.session_state["role"] == "Store":
                 st.write("### 📋 Transaction Log")
@@ -696,8 +733,8 @@ def manage_tab(tab_name, worksheet_name):
                 if "Qty" in df_display.columns: df_display["Qty"] = pd.to_numeric(df_display["Qty"], errors='coerce').fillna(0)
                 if "Date Of Entry" in df_display.columns: df_display["Date Of Entry"] = pd.to_datetime(df_display["Date Of Entry"], errors='coerce')
 
-                # Store decimals kept
-                edited_df = st.data_editor(df_display, use_container_width=True, num_rows="fixed", key="store_editor", disabled=["_original_idx"], column_config={"Qty": st.column_config.NumberColumn("Qty", format="%.2f"), "Date Of Entry": st.column_config.DateColumn("Date"), "Type": st.column_config.TextColumn("Item Type")})
+                # Removed fixed format to allow mixed int/float display
+                edited_df = st.data_editor(df_display, use_container_width=True, num_rows="fixed", key="store_editor", disabled=["_original_idx"], column_config={"Qty": st.column_config.NumberColumn("Qty"), "Date Of Entry": st.column_config.DateColumn("Date"), "Type": st.column_config.TextColumn("Item Type")})
                 clean_view = df_display.drop(columns=["_original_idx"], errors='ignore')
                 clean_edited = edited_df.drop(columns=["_original_idx"], errors='ignore')
                 if not clean_view.equals(clean_edited):
@@ -843,6 +880,7 @@ def manage_tab(tab_name, worksheet_name):
                         if not df_viz_filtered.empty and "Channel Name" in df_viz_filtered.columns:
                             channel_dist = df_viz_filtered.groupby("Channel Name")["Today's Order"].sum().reset_index()
                             fig_pie = px.pie(channel_dist, values="Today's Order", names="Channel Name", title="Channel Share", hole=0.4)
+                            # LEGEND MOVED TO BOTTOM
                             fig_pie.update_layout(legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5))
                             st.plotly_chart(fig_pie, use_container_width=True)
 
