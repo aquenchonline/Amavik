@@ -10,13 +10,13 @@ from datetime import date, timedelta, datetime
 # 1. PAGE CONFIGURATION
 # ------------------------------------------------------------------
 st.set_page_config(
-    page_title="Amavik Operations", 
+    page_title="ERP System", 
     layout="wide", 
     page_icon="🏭",
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS for spacing and button styling
+# Custom CSS
 st.markdown("""
 <style>
     div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column;"] > div[data-testid="stVerticalBlock"] {
@@ -27,7 +27,6 @@ st.markdown("""
         padding-top: 0;
         padding-bottom: 0;
     }
-    /* Tabs styling */
     .stTabs [data-baseweb="tab-list"] {
         gap: 10px;
     }
@@ -49,7 +48,7 @@ st.markdown("""
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1S6xS6hcdKSPtzKxCL005GwvNWQNspNffNveI3P9zCgw/edit"
 
 # ------------------------------------------------------------------
-# 2. JAVASCRIPT HELPER (ENTER KEY NAVIGATION)
+# 2. JAVASCRIPT HELPER
 # ------------------------------------------------------------------
 def inject_enter_key_navigation():
     js = """
@@ -70,7 +69,7 @@ def inject_enter_key_navigation():
     components.html(js, height=0, width=0)
 
 # ------------------------------------------------------------------
-# 3. USER AUTHENTICATION DATABASE
+# 3. USER AUTHENTICATION
 # ------------------------------------------------------------------
 USERS = {
     "Production": {"pass": "Amavik@80", "role": "Production", "access": ["Production"]},
@@ -91,7 +90,7 @@ if "logged_in" not in st.session_state:
 if "edit_idx" not in st.session_state:
     st.session_state["edit_idx"] = None 
 
-# 🔄 Permission Sync
+# Permission Sync
 if st.session_state["logged_in"] and st.session_state["user"] in USERS:
     st.session_state["access"] = USERS[st.session_state["user"]]["access"]
 
@@ -198,21 +197,24 @@ def render_task_cards(df_display, date_col, role_name, data, worksheet_name):
     for i, (index, row) in enumerate(df_display.iterrows()):
         col = cols[i % 4]
         with col:
-            prio = int(row.get('Order Priority', 999))
+            # Use .get() to prevent KeyError if column is missing
+            prio = int(pd.to_numeric(row.get('Order Priority'), errors='coerce') or 999)
             emoji_prio = "🔴" if prio == 1 else "🟡" if prio == 2 else "🟢"
+            
             with st.container(border=True):
                 c_head, c_del = st.columns([4, 1])
-                with c_head: st.markdown(f"**{emoji_prio} {row['Party Name']}**")
+                with c_head: st.markdown(f"**{emoji_prio} {row.get('Party Name', 'Unknown')}**")
                 with c_del:
                     if st.session_state["role"] == "Admin":
                         if st.button("❌", key=f"del_{worksheet_name}_{index}", help="Delete"):
                             delete_task(data, index, worksheet_name)
 
-                st.caption(f"Prio: {prio} | {row[date_col]}")
-                st.write(f"**{row['Item Name']}**")
+                st.caption(f"Prio: {prio} | {row.get(date_col, '-')}")
+                st.write(f"**{row.get('Item Name', 'Unknown Item')}**")
+                
                 c1, c2 = st.columns(2)
-                with c1: st.write(f"**Qty:** {int(row.get('Qty', 0))}")
-                with c2: st.write(f"**Ready:** {int(row.get('Ready Qty', 0))}")
+                with c1: st.write(f"**Qty:** {int(pd.to_numeric(row.get('Qty'), errors='coerce') or 0)}")
+                with c2: st.write(f"**Ready:** {int(pd.to_numeric(row.get('Ready Qty'), errors='coerce') or 0)}")
 
                 details = []
                 if row.get('Logo'): details.append(f"Logo: {row['Logo']}")
@@ -229,13 +231,13 @@ def render_task_cards(df_display, date_col, role_name, data, worksheet_name):
 def render_edit_form(edit_idx, data, worksheet_name, date_col):
     if edit_idx in data.index:
         row_data = data.loc[edit_idx]
-        st.markdown(f"### ✏️ Editing: {row_data['Item Name']}")
+        st.markdown(f"### ✏️ Editing: {row_data.get('Item Name', 'Task')}")
         
         if st.session_state["role"] == "Admin":
             with st.form(f"admin_{worksheet_name}_edit"):
                 c1, c2, c3 = st.columns(3)
                 with c1: 
-                    new_date = st.date_input("Order Date", pd.to_datetime(row_data[date_col]).date())
+                    new_date = st.date_input("Order Date", pd.to_datetime(row_data.get(date_col, date.today())).date())
                     new_party = st.text_input("Party Name", row_data.get('Party Name', ''))
                 with c2:
                     new_item = st.text_input("Item Name", row_data.get('Item Name', ''))
@@ -405,7 +407,10 @@ def manage_tab(tab_name, worksheet_name):
         
         # --- FIX FOR KEYERROR: Create Columns if Missing ---
         if "Party Name" not in data.columns: data["Party Name"] = ""
+        if "Item Name" not in data.columns: data["Item Name"] = ""
         if "Order Priority" not in data.columns: data["Order Priority"] = 999
+        if "Qty" not in data.columns: data["Qty"] = 0
+        if "Ready Qty" not in data.columns: data["Ready Qty"] = 0
         
         data["Status"] = data["Status"].fillna("Pending").replace("", "Pending")
         date_col = "Order Date" if "Order Date" in data.columns else "Date"
