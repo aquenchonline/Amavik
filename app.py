@@ -72,8 +72,7 @@ except Exception as e:
 # ------------------------------------------------------------------
 def filter_by_date(df, filter_option, date_col_name="Date"):
     if df.empty: return df
-    df = df.copy() # Work on a copy
-    # Coerce date column
+    df = df.copy() 
     df["temp_date"] = pd.to_datetime(df[date_col_name], errors='coerce').dt.date
     today = date.today()
     mask = pd.Series([False] * len(df))
@@ -139,8 +138,6 @@ def manage_tab(tab_name, worksheet_name):
     # A. STORE TAB LOGIC (INVENTORY SYSTEM)
     # ===============================================================
     if worksheet_name == "Store":
-        df_display = pd.DataFrame()
-
         # Header & Refresh
         c_title, c_ref = st.columns([8, 1])
         with c_title: st.subheader("📦 Store Inventory Management")
@@ -149,10 +146,47 @@ def manage_tab(tab_name, worksheet_name):
                 st.cache_data.clear()
                 st.rerun()
 
-        # Live Stock Levels
-        if not data.empty and "Item Name" in data.columns and "Qty" in data.columns:
-            with st.expander("📊 View Live Stock Levels (Calculated)", expanded=True):
-                df_calc = data.copy()
+        # --- 1. FILTERS (MOVED TO TOP) ---
+        # Prepare dropdown lists
+        items_list = sorted(data["Item Name"].astype(str).unique()) if "Item Name" in data.columns else []
+        vendor_list = sorted(data["Recvd From"].astype(str).unique()) if "Recvd From" in data.columns else []
+        type_list = sorted(data["Type"].astype(str).unique()) if "Type" in data.columns else []
+
+        c1, c2, c3, c4, c5 = st.columns(5)
+        
+        with c1: 
+            d_filter = st.selectbox("📅 Date Filter", ["All", "Today", "Yesterday", "Prev 7 Days", "This Month"], key="st_date")
+        with c2:
+            i_filter = st.multiselect("📦 Item Name", items_list, key="st_item")
+        with c3:
+            # Renamed to "For or From" (Party Name)
+            v_filter = st.multiselect("busts_in_silhouette: For or From", vendor_list, key="st_vendor")
+        with c4:
+            # New Type Filter
+            t_filter = st.multiselect("🏷️ Product Type", type_list, key="st_type")
+        with c5:
+            trans_filter = st.selectbox("arrows_counterclockwise: Transaction", ["All", "Inward", "Outward"], key="st_trans")
+
+        # --- APPLY FILTERS (BEFORE CALCULATION) ---
+        filtered_df = filter_by_date(data, d_filter, date_col_name="Date Of Entry")
+        
+        if i_filter: 
+            filtered_df = filtered_df[filtered_df["Item Name"].isin(i_filter)]
+        if v_filter: 
+            filtered_df = filtered_df[filtered_df["Recvd From"].isin(v_filter)]
+        if t_filter: 
+            filtered_df = filtered_df[filtered_df["Type"].isin(t_filter)]
+        if trans_filter != "All": 
+            filtered_df = filtered_df[filtered_df["Transaction Type"] == trans_filter]
+
+        st.divider()
+
+        # --- 2. LIVE STOCK LEVEL (Calculated based on Filters) ---
+        # Logic: We calculate stock based on the filtered dataset. 
+        # Note: Usually stock is global, but "Show calculated values based on filter" means summarize the current view.
+        if not filtered_df.empty and "Item Name" in filtered_df.columns and "Qty" in filtered_df.columns:
+            with st.expander("📊 Live Stock Analysis (Based on Current Filters)", expanded=True):
+                df_calc = filtered_df.copy()
                 df_calc["Qty"] = pd.to_numeric(df_calc["Qty"], errors="coerce").fillna(0)
                 
                 stock_summary = []
@@ -173,110 +207,108 @@ def manage_tab(tab_name, worksheet_name):
                         "Type": i_type,
                         "Total Inward": inward,
                         "Total Outward": outward,
-                        "Available Balance": balance,
+                        "Net Change": balance, # Changed label since filtered view might not represent total global stock
                         "UOM": uom
                     })
                 
                 df_stock = pd.DataFrame(stock_summary)
                 if not df_stock.empty:
                     st.dataframe(
-                        df_stock.style.highlight_between(left=0, right=0, subset=["Available Balance"], color="#ffcdd2"),
+                        df_stock.style.highlight_between(left=0, right=0, subset=["Net Change"], color="#ffcdd2"),
                         use_container_width=True,
                         column_config={
-                            "Available Balance": st.column_config.NumberColumn("Current Stock", format="%d"),
+                            "Net Change": st.column_config.NumberColumn("Net Balance (Selection)", format="%d"),
                             "Total Inward": st.column_config.NumberColumn("Total In", format="%d"),
                             "Total Outward": st.column_config.NumberColumn("Total Out", format="%d"),
                         }
                     )
                 else:
-                    st.info("No stock data found.")
+                    st.info("No stock data matches filters.")
 
-        st.divider()
-
-        # Filters
-        c1, c2, c3, c4 = st.columns(4)
-        with c1: d_filter = st.selectbox("📅 Date Filter", ["All", "Today", "Yesterday", "Prev 7 Days", "This Month"], key="st_date")
-        with c2: items_list = sorted(data["Item Name"].astype(str).unique()) if "Item Name" in data.columns else []
-        i_filter = st.multiselect("📦 Item Search", items_list, key="st_item")
-        with c3: vendor_list = sorted(data["Recvd From"].astype(str).unique()) if "Recvd From" in data.columns else []
-        v_filter = st.multiselect("busts_in_silhouette: Recvd From", vendor_list, key="st_vendor")
-        with c4: trans_filter = st.selectbox("arrows_counterclockwise: Transaction", ["All", "Inward", "Outward"], key="st_trans")
-
-        # Apply Filters
-        filtered_df = filter_by_date(data, d_filter, date_col_name="Date Of Entry")
-        if i_filter: filtered_df = filtered_df[filtered_df["Item Name"].isin(i_filter)]
-        if v_filter: filtered_df = filtered_df[filtered_df["Recvd From"].isin(v_filter)]
-        if trans_filter != "All": filtered_df = filtered_df[filtered_df["Transaction Type"] == trans_filter]
-
+        # --- 3. TRANSACTION LOG ---
         st.write("### 📋 Transaction Log")
         
-        # --- FIX: ENSURE DATA TYPES BEFORE EDITOR ---
         if filtered_df.empty:
             df_display = pd.DataFrame(columns=data.columns).drop(columns=["_original_idx"], errors="ignore")
         else:
-            df_display = filtered_df.copy() # Copy to avoid warnings
+            df_display = filtered_df.copy()
 
-        # 1. Force Qty to Number
+        # Force Data Types
         if "Qty" in df_display.columns:
             df_display["Qty"] = pd.to_numeric(df_display["Qty"], errors='coerce').fillna(0)
-        
-        # 2. Force Date to Date Object
         if "Date Of Entry" in df_display.columns:
             df_display["Date Of Entry"] = pd.to_datetime(df_display["Date Of Entry"], errors='coerce')
 
-        disabled_cols = ["_original_idx"]
+        # PERMISSIONS: Admin = Read Only. Store User = Edit.
+        is_store_user = (st.session_state["role"] == "Store")
+        
+        # If Admin, disable all columns. If Store user, disable only tracking ID.
+        disabled_cols = []
+        if not is_store_user:
+            # Admin or others -> READ ONLY
+            # We pass the list of all columns to 'disabled' to lock them
+            disabled_cols = df_display.columns.tolist() 
+        else:
+            # Store User -> Can edit
+            disabled_cols = ["_original_idx"]
 
         edited_df = st.data_editor(
             df_display,
             use_container_width=True,
             num_rows="fixed",
             key="store_editor",
-            disabled=disabled_cols if st.session_state["role"] == "Admin" else ["_original_idx"],
+            disabled=disabled_cols, 
             column_config={
                 "Qty": st.column_config.NumberColumn("Qty", format="%d"),
                 "Date Of Entry": st.column_config.DateColumn("Date Of Entry", format="YYYY-MM-DD")
             }
         )
 
-        clean_view = df_display.drop(columns=["_original_idx"], errors='ignore')
-        clean_edited = edited_df.drop(columns=["_original_idx"], errors='ignore')
-        
-        if not clean_view.equals(clean_edited):
-            if st.button("💾 Save Changes", key="save_store"):
-                save_smart_update(data, edited_df, worksheet_name)
+        # Save Button (Only visible if Store User edits)
+        if is_store_user:
+            clean_view = df_display.drop(columns=["_original_idx"], errors='ignore')
+            clean_edited = edited_df.drop(columns=["_original_idx"], errors='ignore')
+            
+            if not clean_view.equals(clean_edited):
+                if st.button("💾 Save Changes", key="save_store"):
+                    save_smart_update(data, edited_df, worksheet_name)
 
-        st.divider()
-        with st.expander("➕ Update Stock (Add New Entry)", expanded=True):
-            with st.form("store_form"):
-                c1, c2, c3 = st.columns(3)
-                with c1: date_ent = st.date_input("Date Of Entry", value=date.today())
-                with c2: trans_type = st.selectbox("Transaction Type", ["Inward", "Outward"])
-                with c3: qty = st.number_input("Quantity", min_value=1, step=1)
-                c4, c5, c6 = st.columns(3)
-                with c4: item_name = st.text_input("Item Name")
-                with c5: uom = st.selectbox("UOM", ["Pcs", "Boxes", "Kg", "Ltr", "Set", "Packet"])
-                with c6: i_type = st.selectbox("Type", ["Inner Box", "Outer Box", "Washer", "String", "Cap", "Bubble", "Bottle", "Other"])
-                c7, c8, c9 = st.columns(3)
-                with c7: recvd_from = st.text_input("Recvd From / Sent To")
-                with c8: vendor_brand = st.text_input("Vendor Name (Brand)")
-                with c9: invoice_no = st.text_input("Invoice No. (Inward Only)")
+        # --- 4. ADD NEW TRANSACTION FORM (STORE USER ONLY) ---
+        if is_store_user:
+            st.divider()
+            with st.expander("➕ Update Stock (Add New Entry)", expanded=True):
+                with st.form("store_form"):
+                    c1, c2, c3 = st.columns(3)
+                    with c1: date_ent = st.date_input("Date Of Entry", value=date.today())
+                    with c2: trans_type = st.selectbox("Transaction Type", ["Inward", "Outward"])
+                    with c3: qty = st.number_input("Quantity", min_value=1, step=1)
+                    c4, c5, c6 = st.columns(3)
+                    with c4: item_name = st.text_input("Item Name")
+                    with c5: uom = st.selectbox("UOM", ["Pcs", "Boxes", "Kg", "Ltr", "Set", "Packet"])
+                    with c6: i_type = st.selectbox("Type", ["Inner Box", "Outer Box", "Washer", "String", "Cap", "Bubble", "Bottle", "Other"])
+                    c7, c8, c9 = st.columns(3)
+                    with c7: recvd_from = st.text_input("Recvd From / Sent To")
+                    with c8: vendor_brand = st.text_input("Vendor Name (Brand)")
+                    with c9: invoice_no = st.text_input("Invoice No. (Inward Only)")
 
-                if st.form_submit_button("Submit Transaction"):
-                    if not item_name:
-                        st.warning("⚠️ Item Name is required!")
-                    else:
-                        new_entry = pd.DataFrame([{
-                            "Date Of Entry": str(date_ent),
-                            "Recvd From": recvd_from,
-                            "Vendor Name(Brand)": vendor_brand,
-                            "Type": i_type,
-                            "Item Name": item_name,
-                            "Qty": qty,
-                            "UOM": uom,
-                            "Transaction Type": trans_type,
-                            "Invoice No.": invoice_no
-                        }])
-                        save_new_row(data, new_entry, worksheet_name)
+                    if st.form_submit_button("Submit Transaction"):
+                        if not item_name:
+                            st.warning("⚠️ Item Name is required!")
+                        else:
+                            new_entry = pd.DataFrame([{
+                                "Date Of Entry": str(date_ent),
+                                "Recvd From": recvd_from,
+                                "Vendor Name(Brand)": vendor_brand,
+                                "Type": i_type,
+                                "Item Name": item_name,
+                                "Qty": qty,
+                                "UOM": uom,
+                                "Transaction Type": trans_type,
+                                "Invoice No.": invoice_no
+                            }])
+                            save_new_row(data, new_entry, worksheet_name)
+        else:
+            st.info("ℹ️ Admin Mode: Read-Only Access")
         
         return 
 
