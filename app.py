@@ -18,63 +18,65 @@ st.set_page_config(
 )
 
 # ------------------------------------------------------------------
-# 2. UI/UX STYLING (GXON + AdminUX Theme)
+# 2. UI/UX STYLING (GXON Analytics + AdminUX Theme)
 # ------------------------------------------------------------------
 st.markdown("""
 <style>
-    /* IMPORT FONTS */
+    /* IMPORT FONTS (Plus Jakarta Sans for that modern dashboard look) */
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 
-    /* GLOBAL RESET & FONTS */
+    /* GLOBAL RESET */
     html, body, [class*="css"] {
         font-family: 'Plus Jakarta Sans', sans-serif;
         color: #2a3547;
     }
 
-    /* APP BACKGROUND */
+    /* BACKGROUND */
     .stApp {
-        background-color: #F4F7FE; /* GXON Light Dashboard BG */
+        background-color: #F4F7FE; /* Soft Dashboard Blue-Grey */
     }
 
     /* ======================================= */
-    /* SIDEBAR STYLING (Light/Dark/Orange/Blue) */
+    /* SIDEBAR STYLING                         */
     /* ======================================= */
     section[data-testid="stSidebar"] {
         background-color: #FFFFFF;
         border-right: 1px solid #EAEFF4;
     }
     
-    /* Sidebar Text */
-    section[data-testid="stSidebar"] * {
-        color: #111C43 !important; /* Dark Navy Text */
+    /* Sidebar Text - Dark Navy */
+    section[data-testid="stSidebar"] h1, 
+    section[data-testid="stSidebar"] h2, 
+    section[data-testid="stSidebar"] h3, 
+    section[data-testid="stSidebar"] span, 
+    section[data-testid="stSidebar"] p {
+        color: #111C43 !important; 
+        font-weight: 600;
     }
 
-    /* NAV BUTTONS */
+    /* NAV BUTTONS (Radio) */
     div[data-testid="stSidebar"] div.stRadio > div[role="radiogroup"] > label {
-        background-color: #F8F9FA;
-        border: 1px solid #EFF3F8;
+        background-color: #ffffff;
+        border: none;
         padding: 12px 20px;
-        margin-bottom: 6px;
-        color: #5A6A85 !important;
+        margin-bottom: 5px;
+        color: #5A6A85 !important; /* Muted Text */
         border-radius: 8px;
         font-weight: 500;
         transition: all 0.2s ease-in-out;
     }
 
-    /* HOVER: Deep Blue */
+    /* Hover State - Deep Blue */
     div[data-testid="stSidebar"] div.stRadio > div[role="radiogroup"] > label:hover {
         background-color: #111C43 !important;
         color: #FFFFFF !important;
-        border-color: #111C43;
     }
 
-    /* ACTIVE: Orange */
+    /* Active State - Orange */
     div[data-testid="stSidebar"] div.stRadio > div[role="radiogroup"] > label[data-checked="true"] {
         background-color: #FF8C00 !important; /* Orange */
         color: white !important;
-        border-color: #FF8C00;
-        font-weight: 600;
-        box-shadow: 0 4px 10px rgba(255, 140, 0, 0.25);
+        box-shadow: 0px 4px 10px rgba(255, 140, 0, 0.25);
     }
     
     /* Hide Radio Circles */
@@ -112,14 +114,12 @@ st.markdown("""
     div[data-testid="stMetricValue"] { font-size: 1.8rem; color: #2A3547; font-weight: 700; }
 
     /* ======================================= */
-    /* TABLES & SEARCH BAR                     */
+    /* SEARCH BAR (Pill Shape)                 */
     /* ======================================= */
-    
-    /* Custom Search Bar */
     .stTextInput input {
         border-radius: 50px !important;
         border: 1px solid #DFE5EF;
-        padding: 8px 20px;
+        padding: 10px 20px;
         font-size: 0.9rem;
         background-color: #fff;
     }
@@ -141,21 +141,17 @@ st.markdown("""
     
     .stTabs [data-baseweb="tab"] {
         height: 45px;
-        background-color: transparent;
         border: none;
         color: #5A6A85;
         font-weight: 600;
         font-size: 0.95rem;
-        border-bottom: 3px solid transparent;
-        border-radius: 0;
-        padding: 0 5px;
+        background-color: transparent;
     }
     
     .stTabs [aria-selected="true"] {
         color: #5D87FF !important;
-        border-bottom: 3px solid #5D87FF !important;
+        border-bottom: 2px solid #5D87FF !important;
         background-color: transparent !important;
-        box-shadow: none !important;
     }
 
     /* Buttons */
@@ -165,7 +161,7 @@ st.markdown("""
         border-radius: 8px;
         font-weight: 600;
         border: none;
-        height: 2.6em;
+        height: 2.5em;
         box-shadow: 0 4px 14px 0 rgba(93, 135, 255, 0.39);
         transition: 0.2s;
     }
@@ -174,9 +170,6 @@ st.markdown("""
         color: white;
     }
 
-    /* Headings */
-    h1, h2, h3, h4 { color: #2A3547 !important; font-weight: 700; }
-    
     /* MOBILE OPTIMIZATIONS */
     @media (max-width: 768px) {
         div[data-testid="column"] {
@@ -241,7 +234,6 @@ if st.session_state["logged_in"] and st.session_state["user"] in USERS:
 
 def login():
     st.title("🔒 Amavik ERP")
-    st.markdown("### Sign In")
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
         username = st.text_input("User ID")
@@ -351,89 +343,88 @@ def delete_task(original_data, index_to_delete, sheet_name):
     except Exception as e: st.error(f"Error deleting: {e}")
 
 # ------------------------------------------------------------------
-# 7. VISUALIZATION HELPERS (Updated to match reference)
+# 7. TABLE & GRAPH VISUALIZATION HELPERS
 # ------------------------------------------------------------------
 def style_plotly_chart(fig):
-    """Applies the GXON Spline/Curved look to charts."""
+    """Apply GXON Spline & Gradient Style to Charts"""
     fig.update_layout(
         plot_bgcolor='white',
         paper_bgcolor='white',
         font_family="Plus Jakarta Sans",
         font_color="#2A3547",
         title_font_size=16,
-        margin=dict(l=20, r=20, t=40, b=20),
+        margin=dict(l=20, r=20, t=40, b=50), # More bottom margin for legend
         xaxis=dict(showgrid=False, zeroline=False),
         yaxis=dict(showgrid=True, gridcolor='#EAEFF4', zeroline=False),
         legend=dict(
             orientation="h",
             yanchor="bottom",
-            y=-0.2,
+            y=-0.3,
             xanchor="center",
             x=0.5
         )
     )
+    # Add Gradient Fill if line chart
+    if hasattr(fig, 'data') and len(fig.data) > 0 and fig.data[0].type == 'scatter':
+         fig.update_traces(fill='tozeroy', mode='lines+markers', line=dict(width=3))
+    
     return fig
 
-# ------------------------------------------------------------------
-# 8. TABLE STYLING HELPER (Crucial for the "Look")
-# ------------------------------------------------------------------
 def color_status(val):
-    """Pandas Styler function for Status Pills."""
+    """Color Pills for Table Status"""
     if not isinstance(val, str): return ''
     val = val.lower()
     if 'complete' in val or 'confirmed' in val:
-        return 'background-color: #E6FFFA; color: #13DEB9; font-weight: 600; padding: 4px 8px; border-radius: 4px;'
+        return 'background-color: #E6FFFA; color: #13DEB9; font-weight: 600; padding: 4px 10px; border-radius: 20px;'
     elif 'pending' in val:
-        return 'background-color: #FEF5E5; color: #FFAE1F; font-weight: 600; padding: 4px 8px; border-radius: 4px;'
+        return 'background-color: #FEF5E5; color: #FFAE1F; font-weight: 600; padding: 4px 10px; border-radius: 20px;'
     elif 'ship' in val or 'dispatch' in val:
-        return 'background-color: #EBF3FE; color: #5D87FF; font-weight: 600; padding: 4px 8px; border-radius: 4px;'
+        return 'background-color: #EBF3FE; color: #5D87FF; font-weight: 600; padding: 4px 10px; border-radius: 20px;'
     return ''
 
 def render_styled_table(df, key_prefix, editable=False):
+    """Renders a dataframe looking like the 'Recent Orders' reference"""
     if df.empty:
         st.info("No data available.")
-        return
+        return None
 
     # Header with Search
     c_title, c_search = st.columns([3, 1])
-    with c_title: st.markdown("##### 📋 Recent Entries")
+    with c_title: st.markdown("##### 📋 Entries")
     with c_search: 
         search = st.text_input("Search", placeholder="Search...", key=f"search_{key_prefix}", label_visibility="collapsed")
 
-    # Filter Logic
+    # Filter
     df_show = df.copy()
     if search:
         mask = df_show.astype(str).apply(lambda x: x.str.contains(search, case=False, na=False)).any(axis=1)
         df_show = df_show[mask]
 
-    # Column Config
+    # Configs
     st_config = {}
-    
-    # Auto-detect Status column
     status_col = next((c for c in df_show.columns if "Status" in c), None)
     
-    # Auto-detect Date columns
     date_cols = [c for c in df_show.columns if "Date" in c]
     for dc in date_cols:
         st_config[dc] = st.column_config.DateColumn(dc, format="YYYY-MM-DD")
 
-    # If Not Editable, apply Pandas Styler for colors
     if not editable:
+        # Apply Pandas Styling for Pills
         styled_df = df_show.style.map(color_status, subset=[status_col] if status_col else [])
         st.dataframe(
             styled_df,
             use_container_width=True,
             column_config=st_config,
-            hide_index=True # Match reference
+            hide_index=True 
         )
         return None
     else:
-        # If Editable, standard editor but clean
         if status_col:
             st_config[status_col] = st.column_config.SelectboxColumn(
                 "Status",
                 options=["Pending", "Complete", "Next Day", "Shipped", "Confirmed"],
-                required=True
+                required=True,
+                width="medium"
             )
             
         edited = st.data_editor(
@@ -448,7 +439,7 @@ def render_styled_table(df, key_prefix, editable=False):
         return edited
 
 # ------------------------------------------------------------------
-# 9. COMPONENT LOGIC
+# 8. COMPONENT LOGIC
 # ------------------------------------------------------------------
 def render_task_cards(df_display, date_col, role_name, data, worksheet_name):
     cols = st.columns(4)
@@ -474,6 +465,7 @@ def render_task_cards(df_display, date_col, role_name, data, worksheet_name):
                     
                     qty_val = smart_format(row.get('Qty'))
                     ready_val = smart_format(row.get('Ready Qty'))
+                    
                     st.markdown(f"<div style='display:flex; justify-content:space-between; margin-top:10px;'><div><small>Target</small><h5>{qty_val}</h5></div><div><small>Ready</small><h5>{ready_val}</h5></div></div>", unsafe_allow_html=True)
 
                     details = []
@@ -649,6 +641,7 @@ def manage_tab(tab_name, worksheet_name):
                             save_new_row(data, new_order, worksheet_name)
                     inject_enter_key_navigation()
 
+            # Styled Table for Order Log
             if not data.empty:
                 if "Qty" in data.columns: data["Qty"] = pd.to_numeric(data["Qty"], errors='coerce').fillna(0).astype(int)
                 if "Date" in data.columns: data["Date"] = pd.to_datetime(data["Date"], errors='coerce')
@@ -679,6 +672,7 @@ def manage_tab(tab_name, worksheet_name):
                     if "Order Received" not in base_pivot.columns: base_pivot["Order Received"] = 0
                     if "Dispatch" not in base_pivot.columns: base_pivot["Dispatch"] = 0
                     base_pivot["Pending Balance"] = base_pivot["Order Received"] - base_pivot["Dispatch"]
+                    
                     base_pivot = base_pivot.round(2)
                     cols_to_int = ["Order Received", "Dispatch", "Pending Balance"]
                     for c in cols_to_int: base_pivot[c] = base_pivot[c].astype(int)
@@ -949,20 +943,20 @@ def manage_tab(tab_name, worksheet_name):
         with st.container(border=True):
             st.write("### 📋 Detailed Logs")
             if df_curr.empty:
-                df_display = pd.DataFrame(columns=data.columns).drop(columns=["dt"], errors="ignore") if not data.empty else pd.DataFrame()
+                display_df = pd.DataFrame(columns=data.columns).drop(columns=["dt"], errors="ignore") if not data.empty else pd.DataFrame()
             else:
-                df_display = df_curr.drop(columns=["dt"], errors="ignore")
+                display_df = df_curr.drop(columns=["dt"], errors="ignore")
 
             is_editable = (st.session_state["role"] == "Ecommerce")
             if is_editable:
                 cols_to_int_ecom = ["Today's Order", "Today's Dispatch", "Return"]
                 for c in cols_to_int_ecom:
-                    if c in df_display.columns:
-                        df_display[c] = pd.to_numeric(df_display[c], errors='coerce').fillna(0).astype(int)
+                    if c in display_df.columns:
+                        display_df[c] = pd.to_numeric(display_df[c], errors='coerce').fillna(0).astype(int)
 
-                edited_df = render_styled_table(df_display, "eco_log", editable=True)
+                edited_df = render_styled_table(display_df, "eco_log", editable=True)
                 if edited_df is not None:
-                    clean_view = df_display.drop(columns=["_original_idx"], errors='ignore')
+                    clean_view = display_df.drop(columns=["_original_idx"], errors='ignore')
                     clean_edited = edited_df.drop(columns=["_original_idx"], errors='ignore')
                     if not clean_view.equals(clean_edited):
                         if st.button("💾 Save Table Changes"): save_smart_update(data, edited_df, worksheet_name)
@@ -983,7 +977,8 @@ def manage_tab(tab_name, worksheet_name):
                         
                         inject_enter_key_navigation()
             else:
-                render_styled_table(df_display, "eco_read")
+                st.info("ℹ️ Read-Only View (Admin Access)")
+                render_styled_table(display_df.drop(columns=["_original_idx"], errors='ignore'), "eco_read")
         return
 
 # ------------------------------------------------------------------
