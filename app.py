@@ -29,7 +29,7 @@ st.markdown("""
         font-family: 'Inter', sans-serif;
     }
     
-    /* BACKGROUND COLORS */
+    /* BACKGROUND COLORS - KEEPING THIS UNCHANGED */
     .stApp {
         background-color: #F3F6FD; /* Light Blue-Gray Background */
     }
@@ -73,9 +73,9 @@ st.markdown("""
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
 
-    /* CARD STYLING (White Box with Shadow) */
+    /* CARD STYLING (FORCING WHITE BOX) */
     div[data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: white;
+        background-color: white !important; /* Added !important to force white */
         border-radius: 10px;
         border: 1px solid #e2e8f0;
         box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
