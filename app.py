@@ -22,61 +22,59 @@ st.set_page_config(
 # ------------------------------------------------------------------
 st.markdown("""
 <style>
-    /* IMPORT FONTS (Plus Jakarta Sans for that modern dashboard look) */
+    /* IMPORT FONTS */
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 
-    /* GLOBAL RESET */
+    /* GLOBAL RESET & FONTS */
     html, body, [class*="css"] {
         font-family: 'Plus Jakarta Sans', sans-serif;
         color: #2a3547;
     }
 
-    /* BACKGROUND */
+    /* APP BACKGROUND */
     .stApp {
-        background-color: #F4F7FE; /* Soft Dashboard Blue-Grey */
+        background-color: #F4F7FE; /* GXON Light Dashboard BG */
     }
 
     /* ======================================= */
-    /* SIDEBAR STYLING                         */
+    /* SIDEBAR STYLING (Light/Dark/Orange/Blue) */
     /* ======================================= */
     section[data-testid="stSidebar"] {
         background-color: #FFFFFF;
         border-right: 1px solid #EAEFF4;
     }
     
-    /* Sidebar Text - Dark Navy */
-    section[data-testid="stSidebar"] h1, 
-    section[data-testid="stSidebar"] h2, 
-    section[data-testid="stSidebar"] h3, 
-    section[data-testid="stSidebar"] span, 
-    section[data-testid="stSidebar"] p {
-        color: #111C43 !important; 
-        font-weight: 600;
+    /* Sidebar Text */
+    section[data-testid="stSidebar"] * {
+        color: #111C43 !important; /* Dark Navy Text */
     }
 
-    /* NAV BUTTONS (Radio) */
+    /* NAV BUTTONS */
     div[data-testid="stSidebar"] div.stRadio > div[role="radiogroup"] > label {
-        background-color: #ffffff;
-        border: none;
+        background-color: #F8F9FA;
+        border: 1px solid #EFF3F8;
         padding: 12px 20px;
-        margin-bottom: 5px;
-        color: #5A6A85 !important; /* Muted Text */
+        margin-bottom: 6px;
+        color: #5A6A85 !important;
         border-radius: 8px;
         font-weight: 500;
         transition: all 0.2s ease-in-out;
     }
 
-    /* Hover State - Deep Blue */
+    /* HOVER: Deep Blue */
     div[data-testid="stSidebar"] div.stRadio > div[role="radiogroup"] > label:hover {
         background-color: #111C43 !important;
         color: #FFFFFF !important;
+        border-color: #111C43;
     }
 
-    /* Active State - Orange */
+    /* ACTIVE: Orange */
     div[data-testid="stSidebar"] div.stRadio > div[role="radiogroup"] > label[data-checked="true"] {
         background-color: #FF8C00 !important; /* Orange */
         color: white !important;
-        box-shadow: 0px 4px 10px rgba(255, 140, 0, 0.25);
+        border-color: #FF8C00;
+        font-weight: 600;
+        box-shadow: 0 4px 10px rgba(255, 140, 0, 0.25);
     }
     
     /* Hide Radio Circles */
@@ -114,18 +112,29 @@ st.markdown("""
     div[data-testid="stMetricValue"] { font-size: 1.8rem; color: #2A3547; font-weight: 700; }
 
     /* ======================================= */
-    /* SEARCH BAR (Pill Shape)                 */
+    /* FORMS & INPUTS (Modern Layout)          */
     /* ======================================= */
-    .stTextInput input {
-        border-radius: 50px !important;
+    
+    /* Custom Search Bar & Inputs */
+    .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"] {
+        border-radius: 8px !important;
         border: 1px solid #DFE5EF;
-        padding: 10px 20px;
-        font-size: 0.9rem;
         background-color: #fff;
+        color: #5A6A85;
     }
-    .stTextInput input:focus {
+    
+    .stTextInput input:focus, .stNumberInput input:focus {
         border-color: #5D87FF;
         box-shadow: 0 0 0 3px rgba(93, 135, 255, 0.1);
+    }
+
+    /* Expander Styling (For Forms) */
+    .streamlit-expanderHeader {
+        background-color: #FFFFFF;
+        border: 1px solid #EAEFF4;
+        border-radius: 8px;
+        color: #2A3547;
+        font-weight: 600;
     }
 
     /* ======================================= */
@@ -141,17 +150,21 @@ st.markdown("""
     
     .stTabs [data-baseweb="tab"] {
         height: 45px;
+        background-color: transparent;
         border: none;
         color: #5A6A85;
         font-weight: 600;
         font-size: 0.95rem;
-        background-color: transparent;
+        border-bottom: 3px solid transparent;
+        border-radius: 0;
+        padding: 0 5px;
     }
     
     .stTabs [aria-selected="true"] {
         color: #5D87FF !important;
-        border-bottom: 2px solid #5D87FF !important;
+        border-bottom: 3px solid #5D87FF !important;
         background-color: transparent !important;
+        box-shadow: none !important;
     }
 
     /* Buttons */
@@ -161,7 +174,7 @@ st.markdown("""
         border-radius: 8px;
         font-weight: 600;
         border: none;
-        height: 2.5em;
+        height: 2.6em;
         box-shadow: 0 4px 14px 0 rgba(93, 135, 255, 0.39);
         transition: 0.2s;
     }
@@ -170,6 +183,9 @@ st.markdown("""
         color: white;
     }
 
+    /* Headings */
+    h1, h2, h3, h4 { color: #2A3547 !important; font-weight: 700; }
+    
     /* MOBILE OPTIMIZATIONS */
     @media (max-width: 768px) {
         div[data-testid="column"] {
@@ -343,10 +359,10 @@ def delete_task(original_data, index_to_delete, sheet_name):
     except Exception as e: st.error(f"Error deleting: {e}")
 
 # ------------------------------------------------------------------
-# 7. TABLE & GRAPH VISUALIZATION HELPERS
+# 7. VISUALIZATION HELPERS (GXON STYLE)
 # ------------------------------------------------------------------
 def style_plotly_chart(fig):
-    """Apply GXON Spline & Gradient Style to Charts"""
+    """Applies the GXON Spline & Gradient Style to Charts"""
     fig.update_layout(
         plot_bgcolor='white',
         paper_bgcolor='white',
@@ -359,7 +375,7 @@ def style_plotly_chart(fig):
         legend=dict(
             orientation="h",
             yanchor="bottom",
-            y=-0.3,
+            y=-0.2,
             xanchor="center",
             x=0.5
         )
@@ -371,7 +387,7 @@ def style_plotly_chart(fig):
     return fig
 
 def color_status(val):
-    """Color Pills for Table Status"""
+    """Pandas Styler function for Status Pills."""
     if not isinstance(val, str): return ''
     val = val.lower()
     if 'complete' in val or 'confirmed' in val:
@@ -400,10 +416,13 @@ def render_styled_table(df, key_prefix, editable=False):
         mask = df_show.astype(str).apply(lambda x: x.str.contains(search, case=False, na=False)).any(axis=1)
         df_show = df_show[mask]
 
-    # Configs
+    # Column Config
     st_config = {}
+    
+    # Auto-detect Status column
     status_col = next((c for c in df_show.columns if "Status" in c), None)
     
+    # Auto-detect Date columns
     date_cols = [c for c in df_show.columns if "Date" in c]
     for dc in date_cols:
         st_config[dc] = st.column_config.DateColumn(dc, format="YYYY-MM-DD")
@@ -415,10 +434,11 @@ def render_styled_table(df, key_prefix, editable=False):
             styled_df,
             use_container_width=True,
             column_config=st_config,
-            hide_index=True 
+            hide_index=True # Match reference
         )
         return None
     else:
+        # If Editable, standard editor but clean
         if status_col:
             st_config[status_col] = st.column_config.SelectboxColumn(
                 "Status",
@@ -465,7 +485,6 @@ def render_task_cards(df_display, date_col, role_name, data, worksheet_name):
                     
                     qty_val = smart_format(row.get('Qty'))
                     ready_val = smart_format(row.get('Ready Qty'))
-                    
                     st.markdown(f"<div style='display:flex; justify-content:space-between; margin-top:10px;'><div><small>Target</small><h5>{qty_val}</h5></div><div><small>Ready</small><h5>{ready_val}</h5></div></div>", unsafe_allow_html=True)
 
                     details = []
@@ -551,7 +570,6 @@ def render_edit_form(edit_idx, data, worksheet_name, date_col):
                 st.rerun()
 
 def render_add_task_form(data, worksheet_name):
-    st.divider()
     with st.expander(f"➕ Assign New {worksheet_name} Task", expanded=False):
         with st.form(f"new_{worksheet_name}_task"):
             if worksheet_name == "Production":
@@ -592,7 +610,7 @@ def render_add_task_form(data, worksheet_name):
         inject_enter_key_navigation()
 
 # ------------------------------------------------------------------
-# 8. MAIN LOGIC: MANAGE TAB
+# 9. MAIN LOGIC: MANAGE TAB
 # ------------------------------------------------------------------
 def manage_tab(tab_name, worksheet_name):
     df_curr, df_display = pd.DataFrame(), pd.DataFrame()
@@ -641,7 +659,6 @@ def manage_tab(tab_name, worksheet_name):
                             save_new_row(data, new_order, worksheet_name)
                     inject_enter_key_navigation()
 
-            # Styled Table for Order Log
             if not data.empty:
                 if "Qty" in data.columns: data["Qty"] = pd.to_numeric(data["Qty"], errors='coerce').fillna(0).astype(int)
                 if "Date" in data.columns: data["Date"] = pd.to_datetime(data["Date"], errors='coerce')
@@ -672,7 +689,6 @@ def manage_tab(tab_name, worksheet_name):
                     if "Order Received" not in base_pivot.columns: base_pivot["Order Received"] = 0
                     if "Dispatch" not in base_pivot.columns: base_pivot["Dispatch"] = 0
                     base_pivot["Pending Balance"] = base_pivot["Order Received"] - base_pivot["Dispatch"]
-                    
                     base_pivot = base_pivot.round(2)
                     cols_to_int = ["Order Received", "Dispatch", "Pending Balance"]
                     for c in cols_to_int: base_pivot[c] = base_pivot[c].astype(int)
@@ -982,7 +998,7 @@ def manage_tab(tab_name, worksheet_name):
         return
 
 # ------------------------------------------------------------------
-# 8. APP ORCHESTRATION
+# 9. APP ORCHESTRATION
 # ------------------------------------------------------------------
 if not st.session_state["logged_in"]:
     login()
