@@ -16,31 +16,43 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS for Sticky Header, Beautiful Tabs, and Responsive Mobile
+# Custom CSS for Sticky Header, Stacked Tabs, and Mobile Responsiveness
 st.markdown("""
 <style>
     /* --------------------------------------- */
-    /* STICKY HEADER IMPLEMENTATION            */
+    /* STICKY HEADER & TABS IMPLEMENTATION     */
     /* --------------------------------------- */
     
-    /* 1. Stick the Title & Refresh Button Area */
+    /* 1. Stick the Title Area (App Name + Refresh) */
+    /* We target the specific container holding the title */
     div[data-testid="stVerticalBlock"] > div:has(h1) {
         position: sticky;
         top: 0;
-        z-index: 999;
+        z-index: 1000;
         background-color: white;
         padding-top: 1rem;
         padding-bottom: 0.5rem;
         border-bottom: 1px solid #f0f0f0;
     }
 
-    /* 2. Stick the Tabs right below the Title */
-    .stTabs {
+    /* 2. Stick the MAIN Tabs (First set of tabs on the page) */
+    .stTabs:first-of-type {
         position: sticky;
-        top: 80px; /* Adjust based on title height */
+        top: 75px; /* Height of the sticky title area */
+        z-index: 999;
+        background-color: white;
+        padding-top: 5px;
+        padding-bottom: 5px;
+    }
+
+    /* 3. Stick the SUB Tabs (Any subsequent tabs, e.g. in Store/Order) */
+    .stTabs:nth-of-type(n+2) {
+        position: sticky;
+        top: 125px; /* Title (75) + Main Tabs (50) */
         z-index: 998;
         background-color: white;
-        padding-top: 10px;
+        padding-top: 5px;
+        padding-bottom: 5px;
     }
 
     /* --------------------------------------- */
@@ -57,11 +69,11 @@ st.markdown("""
         transition: all 0.2s;
     }
 
-    /* Tab Styling (Desktop) */
+    /* Tab Styling (Pill Look) */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background-color: transparent;
-        padding-bottom: 10px;
+        padding-bottom: 5px;
     }
 
     .stTabs [data-baseweb="tab"] {
@@ -85,19 +97,14 @@ st.markdown("""
         box-shadow: 0 2px 5px rgba(255, 75, 75, 0.3);
     }
 
-    .stTabs [data-baseweb="tab"]:hover {
-        background-color: #fff;
-        border-color: #FF4B4B;
-        color: #FF4B4B;
-    }
-
     /* --------------------------------------- */
     /* MOBILE RESPONSIVE STYLES (Max Width 768px) */
     /* --------------------------------------- */
     @media (max-width: 768px) {
         
-        /* Adjust sticky top for mobile */
-        .stTabs { top: 70px; }
+        /* Adjust sticky tops for mobile header sizes */
+        .stTabs:first-of-type { top: 70px; }
+        .stTabs:nth-of-type(n+2) { top: 110px; }
 
         /* Sliding Tabs */
         .stTabs [data-baseweb="tab-list"] {
@@ -117,37 +124,22 @@ st.markdown("""
 
         .stTabs [data-baseweb="tab"] {
             flex: 0 0 auto !important;      
-            width: 31% !important;          
-            font-size: 0.7rem !important;
+            width: 31% !important;  /* 3 tabs visible */        
+            font-size: 0.65rem !important; /* Smaller text */
             padding: 4px 2px !important;
             height: 35px !important;
             min-width: auto !important;
             text-align: center;
         }
-
-        p, .stMarkdown, div[data-testid="stMarkdownContainer"] p {
-            font-size: 0.85rem !important;
-        }
-        
-        div[data-testid="stMetricValue"] {
-            font-size: 1.2rem !important;
-        }
-        
-        .stButton button {
-            font-size: 0.8rem;
-            padding-left: 0.3rem;
-            padding-right: 0.3rem;
-        }
-        
-        h1 { font-size: 1.6rem !important; }
-        h2 { font-size: 1.4rem !important; }
-        h3 { font-size: 1.1rem !important; }
         
         div[data-testid="column"] {
             width: 50% !important;
             flex: 0 0 50% !important;
             min-width: 50% !important;
         }
+        
+        h1 { font-size: 1.5rem !important; }
+        .stButton button { font-size: 0.8rem; }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -155,7 +147,7 @@ st.markdown("""
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1S6xS6hcdKSPtzKxCL005GwvNWQNspNffNveI3P9zCgw/edit"
 
 # ------------------------------------------------------------------
-# 2. JAVASCRIPT HELPER
+# 2. JAVASCRIPT HELPER (ENTER KEY NAVIGATION)
 # ------------------------------------------------------------------
 def inject_enter_key_navigation():
     js = """
@@ -176,7 +168,7 @@ def inject_enter_key_navigation():
     components.html(js, height=0, width=0)
 
 # ------------------------------------------------------------------
-# 3. USER AUTHENTICATION
+# 3. USER AUTHENTICATION DATABASE
 # ------------------------------------------------------------------
 USERS = {
     "Production": {"pass": "Amavik@80", "role": "Production", "access": ["Production"]},
@@ -814,21 +806,14 @@ def manage_tab(tab_name, worksheet_name):
     # D. ECOMMERCE DASHBOARD LOGIC
     # ===============================================================
     if worksheet_name == "Ecommerce":
-        df_curr = pd.DataFrame()
-        c_head, c_ch, c_date, c_ref = st.columns([2, 1, 1, 0.5])
-        with c_head: st.subheader("📊 Performance Overview")
-        with c_ref:
-            st.write("")
-            st.write("")
-            if st.button("🔄", key="ref_eco"):
-                st.cache_data.clear()
-                st.rerun()
+        st.subheader("📊 Performance Overview")
         
         unique_channels = ["All Channels"]
         if "Channel Name" in data.columns:
             channels_list = sorted(data["Channel Name"].astype(str).unique().tolist())
             unique_channels.extend(channels_list)
 
+        c_ch, c_date = st.columns(2)
         with c_ch: selected_channel = st.selectbox("Select Channel", unique_channels, index=0)
         with c_date: selected_period = st.selectbox("Compare Period", ["Today", "Yesterday", "Last 7 Days", "Last 15 Days", "Last 30 Days", "This Month", "All Time"], index=0)
 
