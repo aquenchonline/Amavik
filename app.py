@@ -70,9 +70,10 @@ except Exception as e:
 # ------------------------------------------------------------------
 # 5. HELPER FUNCTIONS
 # ------------------------------------------------------------------
-def filter_by_date(df, filter_option):
+def filter_by_date(df, filter_option, date_col_name="Date"):
     if df.empty: return df
-    df["temp_date"] = pd.to_datetime(df["Date"], errors='coerce').dt.date
+    # Handle different column names for date
+    df["temp_date"] = pd.to_datetime(df[date_col_name], errors='coerce').dt.date
     today = date.today()
     mask = pd.Series([False] * len(df))
     
@@ -134,53 +135,203 @@ def manage_tab(tab_name, worksheet_name):
         data['_original_idx'] = data.index
 
     # ===============================================================
-    # A. ECOMMERCE DASHBOARD LOGIC
+    # A. STORE TAB LOGIC (INVENTORY SYSTEM)
+    # ===============================================================
+    if worksheet_name == "Store":
+        # Initialize safe default
+        df_display = pd.DataFrame()
+
+        # --- HEADER & REFRESH ---
+        c_title, c_ref = st.columns([8, 1])
+        with c_title: st.subheader("📦 Store Inventory Management")
+        with c_ref:
+            if st.button("🔄", key="ref_store"):
+                st.cache_data.clear()
+                st.rerun()
+
+        # --- 1. CURRENT STOCK LEVEL (Automatic Calculation) ---
+        if not data.empty and "Item Name" in data.columns and "Qty" in data.columns:
+            with st.expander("📊 View Live Stock Levels (Calculated)", expanded=True):
+                # Ensure numeric
+                df_calc = data.copy()
+                df_calc["Qty"] = pd.to_numeric(df_calc["Qty"], errors="coerce").fillna(0)
+                
+                # Group by Item and Transaction Type
+                stock_summary = []
+                unique_items = df_calc["Item Name"].unique()
+                
+                for item in unique_items:
+                    item_data = df_calc[df_calc["Item Name"] == item]
+                    inward = item_data[item_data["Transaction Type"] == "Inward"]["Qty"].sum()
+                    outward = item_data[item_data["Transaction Type"] == "Outward"]["Qty"].sum()
+                    balance = inward - outward
+                    
+                    # Get the most recent UOM and Type for display
+                    last_entry = item_data.iloc[-1]
+                    uom = last_entry["UOM"] if "UOM" in last_entry else ""
+                    i_type = last_entry["Type"] if "Type" in last_entry else ""
+                    
+                    stock_summary.append({
+                        "Item Name": item,
+                        "Type": i_type,
+                        "Total Inward": inward,
+                        "Total Outward": outward,
+                        "Available Balance": balance,
+                        "UOM": uom
+                    })
+                
+                df_stock = pd.DataFrame(stock_summary)
+                if not df_stock.empty:
+                    # Formatting for cleaner look
+                    st.dataframe(
+                        df_stock.style.highlight_between(left=0, right=0, subset=["Available Balance"], color="#ffcdd2"), # Red if 0
+                        use_container_width=True,
+                        column_config={
+                            "Available Balance": st.column_config.NumberColumn("Current Stock", format="%d"),
+                            "Total Inward": st.column_config.NumberColumn("Total In", format="%d"),
+                            "Total Outward": st.column_config.NumberColumn("Total Out", format="%d"),
+                        }
+                    )
+                else:
+                    st.info("No stock data found.")
+
+        st.divider()
+
+        # --- 2. FILTERS (SEARCH) ---
+        c1, c2, c3, c4 = st.columns(4)
+        with c1: 
+            d_filter = st.selectbox("📅 Date Filter", ["All", "Today", "Yesterday", "Prev 7 Days", "This Month"], key="st_date")
+        with c2:
+            items_list = sorted(data["Item Name"].astype(str).unique()) if "Item Name" in data.columns else []
+            i_filter = st.multiselect("📦 Item Search", items_list, key="st_item")
+        with c3:
+            # Recvd From acts as Vendor/Client
+            vendor_list = sorted(data["Recvd From"].astype(str).unique()) if "Recvd From" in data.columns else []
+            v_filter = st.multiselect("busts_in_silhouette: Recvd From", vendor_list, key="st_vendor")
+        with c4:
+            trans_filter = st.selectbox("arrows_counterclockwise: Transaction", ["All", "Inward", "Outward"], key="st_trans")
+
+        # Apply Filters
+        filtered_df = filter_by_date(data, d_filter, date_col_name="Date Of Entry")
+        if i_filter: filtered_df = filtered_df[filtered_df["Item Name"].isin(i_filter)]
+        if v_filter: filtered_df = filtered_df[filtered_df["Recvd From"].isin(v_filter)]
+        if trans_filter != "All": filtered_df = filtered_df[filtered_df["Transaction Type"] == trans_filter]
+
+        # --- 3. DATA LOG (TRANSACTION HISTORY) ---
+        st.write("### 📋 Transaction Log")
+        
+        # Setup Display DataFrame
+        if filtered_df.empty:
+            df_display = pd.DataFrame(columns=data.columns).drop(columns=["_original_idx"], errors="ignore")
+        else:
+            df_display = filtered_df
+
+        # Permissions: Store User can Add, Admin can Edit.
+        # Store User should probably just View the log to verify, and use Add form.
+        # We'll allow editing for small fixes.
+        
+        disabled_cols = ["_original_idx"]
+        if st.session_state["role"] != "Admin":
+            # Store user can edit basic info but maybe keep it restricted to avoid messing up history?
+            # Let's allow full edit for flexibility, but Admin is safer.
+            pass 
+
+        edited_df = st.data_editor(
+            df_display,
+            use_container_width=True,
+            num_rows="fixed",
+            key="store_editor",
+            disabled=disabled_cols if st.session_state["role"] == "Admin" else ["_original_idx"],
+            column_config={
+                "Qty": st.column_config.NumberColumn("Qty", format="%d"),
+                "Date Of Entry": st.column_config.DateColumn("Date")
+            }
+        )
+
+        # Save Logic
+        clean_view = df_display.drop(columns=["_original_idx"], errors='ignore')
+        clean_edited = edited_df.drop(columns=["_original_idx"], errors='ignore')
+        
+        if not clean_view.equals(clean_edited):
+            if st.button("💾 Save Changes", key="save_store"):
+                save_smart_update(data, edited_df, worksheet_name)
+
+        # --- 4. ADD NEW TRANSACTION FORM ---
+        st.divider()
+        with st.expander("➕ Update Stock (Add New Entry)", expanded=True):
+            with st.form("store_form"):
+                
+                # Row 1
+                c1, c2, c3 = st.columns(3)
+                with c1: date_ent = st.date_input("Date Of Entry", value=date.today())
+                with c2: trans_type = st.selectbox("Transaction Type", ["Inward", "Outward"])
+                with c3: qty = st.number_input("Quantity", min_value=1, step=1)
+
+                # Row 2
+                c4, c5, c6 = st.columns(3)
+                with c4: item_name = st.text_input("Item Name (e.g. STELLO STEEL 1000ML)")
+                with c5: uom = st.selectbox("UOM", ["Pcs", "Boxes", "Kg", "Ltr", "Set", "Packet"])
+                with c6: i_type = st.selectbox("Type", ["Inner Box", "Outer Box", "Washer", "String", "Cap", "Bubble", "Bottle", "Other"])
+
+                # Row 3
+                c7, c8, c9 = st.columns(3)
+                with c7: recvd_from = st.text_input("Recvd From / Sent To")
+                with c8: vendor_brand = st.text_input("Vendor Name (Brand)")
+                with c9: 
+                    # Invoice only needed for Inward usually
+                    invoice_no = st.text_input("Invoice No. (Inward Only)")
+
+                if st.form_submit_button("Submit Transaction"):
+                    if not item_name:
+                        st.warning("⚠️ Item Name is required!")
+                    else:
+                        new_entry = pd.DataFrame([{
+                            "Date Of Entry": str(date_ent),
+                            "Recvd From": recvd_from,
+                            "Vendor Name(Brand)": vendor_brand,
+                            "Type": i_type,
+                            "Item Name": item_name,
+                            "Qty": qty,
+                            "UOM": uom,
+                            "Transaction Type": trans_type,
+                            "Invoice No.": invoice_no
+                        }])
+                        save_new_row(data, new_entry, worksheet_name)
+        
+        return # End Store Logic
+
+    # ===============================================================
+    # B. ECOMMERCE DASHBOARD LOGIC
     # ===============================================================
     if worksheet_name == "Ecommerce":
         df_curr = pd.DataFrame()
 
-        # --- HEADER & REFRESH BUTTON ---
-        st.write("") 
-        # Layout: Title (2) | Channel (1) | Period (1) | Refresh Button (0.5)
+        # Header & Refresh
         c_head, c_ch, c_date, c_ref = st.columns([2, 1, 1, 0.5])
+        with c_head: st.subheader("📊 Performance Overview")
+        with c_ref:
+            st.write("")
+            st.write("")
+            if st.button("🔄", key="ref_eco"):
+                st.cache_data.clear()
+                st.rerun()
         
-        with c_head:
-            st.subheader("📊 Performance Overview")
-        
-        # Filters
         unique_channels = ["All Channels"]
         if "Channel Name" in data.columns:
             channels_list = sorted(data["Channel Name"].astype(str).unique().tolist())
             unique_channels.extend(channels_list)
 
-        with c_ch:
-            selected_channel = st.selectbox("Select Channel", unique_channels, index=0)
+        with c_ch: selected_channel = st.selectbox("Select Channel", unique_channels, index=0)
+        with c_date: selected_period = st.selectbox("Compare Period", ["Today", "Yesterday", "Last 7 Days", "Last 15 Days", "Last 30 Days", "This Month", "All Time"], index=0)
 
-        with c_date:
-            selected_period = st.selectbox(
-                "Compare Period", 
-                ["Today", "Yesterday", "Last 7 Days", "Last 15 Days", "Last 30 Days", "This Month", "All Time"],
-                index=0
-            )
-            
-        # 👇 NEW REFRESH BUTTON
-        with c_ref:
-            st.write("") # Spacer to align button
-            st.write("") 
-            if st.button("🔄", help="Refresh Data", key="ref_eco"):
-                st.cache_data.clear()
-                st.rerun()
-
-        # --- KPI CALCULATION ---
+        # KPI Logic
         if not data.empty:
             df_calc = data.copy()
             df_calc["dt"] = pd.to_datetime(df_calc["Date"], errors='coerce').dt.date
             
-            if selected_channel != "All Channels":
-                df_calc = df_calc[df_calc["Channel Name"] == selected_channel]
+            if selected_channel != "All Channels": df_calc = df_calc[df_calc["Channel Name"] == selected_channel]
 
             today = date.today()
-            
             if selected_period == "Today":
                 curr_start, curr_end = today, today
                 prev_start, prev_end = today - timedelta(days=1), today - timedelta(days=1)
@@ -207,7 +358,6 @@ def manage_tab(tab_name, worksheet_name):
 
             mask_curr = (df_calc["dt"] >= curr_start) & (df_calc["dt"] <= curr_end)
             df_curr = df_calc[mask_curr]
-            
             mask_prev = (df_calc["dt"] >= prev_start) & (df_calc["dt"] <= prev_end)
             df_prev = df_calc[mask_prev]
 
@@ -228,31 +378,27 @@ def manage_tab(tab_name, worksheet_name):
                 pct = round((diff / prev) * 100, 1)
                 return f"{diff} ({pct}%)"
 
-            with k1: st.metric(label="Total Orders", value=c_ord, delta=get_delta(c_ord, p_ord))
-            with k2: st.metric(label="Total Dispatched", value=c_dis, delta=get_delta(c_dis, p_dis))
-            with k3: st.metric(label="Total Returns", value=c_ret, delta=get_delta(c_ret, p_ret), delta_color="inverse")
+            with k1: st.metric("Total Orders", c_ord, delta=get_delta(c_ord, p_ord))
+            with k2: st.metric("Total Dispatched", c_dis, delta=get_delta(c_dis, p_dis))
+            with k3: st.metric("Total Returns", c_ret, delta=get_delta(c_ret, p_ret), delta_color="inverse")
 
         st.divider()
 
-        # --- CHARTS SECTION ---
+        # Charts
         st.subheader("📈 Visual Trends")
         if not data.empty:
             df_viz = data.copy()
             df_viz["Date"] = pd.to_datetime(df_viz["Date"], errors='coerce')
             df_viz["Today's Order"] = pd.to_numeric(df_viz["Today's Order"], errors='coerce').fillna(0)
-
             today = date.today()
             default_start = today - timedelta(days=10)
-            
             c_range, _ = st.columns([1, 2])
-            with c_range:
-                date_range = st.date_input("Chart Date Range", value=(default_start, today), key="viz_range")
+            with c_range: date_range = st.date_input("Chart Date Range", value=(default_start, today), key="viz_range")
 
             if isinstance(date_range, tuple) and len(date_range) == 2:
                 start_d, end_d = date_range
                 mask_viz = (df_viz["Date"].dt.date >= start_d) & (df_viz["Date"].dt.date <= end_d)
                 df_viz_filtered = df_viz[mask_viz]
-
                 g_col, p_col = st.columns([2, 1])
                 with g_col:
                     if not df_viz_filtered.empty:
@@ -260,8 +406,7 @@ def manage_tab(tab_name, worksheet_name):
                         fig_line = px.line(daily_trend, x="Date", y="Today's Order", title="Order Trend", markers=True)
                         fig_line.update_traces(line_color='#FF4B4B', line_width=3)
                         st.plotly_chart(fig_line, use_container_width=True)
-                    else:
-                        st.info("No data for charts")
+                    else: st.info("No data for charts")
                 with p_col:
                     if not df_viz_filtered.empty and "Channel Name" in df_viz_filtered.columns:
                         channel_dist = df_viz_filtered.groupby("Channel Name")["Today's Order"].sum().reset_index()
@@ -270,27 +415,21 @@ def manage_tab(tab_name, worksheet_name):
 
         st.divider()
 
-        # --- DATA TABLE ---
+        # Data Table
         st.write("### 📋 Detailed Logs")
         if df_curr.empty:
-            if not data.empty:
-                display_df = pd.DataFrame(columns=data.columns).drop(columns=["dt"], errors="ignore")
-            else:
-                display_df = pd.DataFrame()
+            display_df = pd.DataFrame(columns=data.columns).drop(columns=["dt"], errors="ignore") if not data.empty else pd.DataFrame()
         else:
             display_df = df_curr.drop(columns=["dt"], errors="ignore")
 
         is_editable = (st.session_state["role"] == "Ecommerce")
-
         if is_editable:
             edited_df = st.data_editor(display_df, use_container_width=True, num_rows="fixed", key="eco_editor", disabled=["_original_idx"])
             clean_view = display_df.drop(columns=["_original_idx"], errors='ignore')
             clean_edited = edited_df.drop(columns=["_original_idx"], errors='ignore')
-            
             if not clean_view.equals(clean_edited):
-                if st.button("💾 Save Table Changes"):
-                    save_smart_update(data, edited_df, worksheet_name)
-
+                if st.button("💾 Save Table Changes"): save_smart_update(data, edited_df, worksheet_name)
+            
             st.divider()
             with st.expander("➕ Add New Ecommerce Entry"):
                 with st.form("eco_form"):
@@ -302,7 +441,6 @@ def manage_tab(tab_name, worksheet_name):
                     with c2:
                         dispatch = st.number_input("Today's Dispatch", min_value=0)
                         ret = st.number_input("Return", min_value=0)
-                    
                     if st.form_submit_button("Add Record"):
                         if not channel: st.warning("Channel Name Required")
                         else:
@@ -311,19 +449,17 @@ def manage_tab(tab_name, worksheet_name):
         else:
             st.info("ℹ️ Read-Only View (Admin Access)")
             st.dataframe(display_df.drop(columns=["_original_idx"], errors='ignore'), use_container_width=True)
-
-        return 
+        return
 
     # ===============================================================
-    # B. STANDARD LOGIC (Production, Packing, Store)
+    # C. STANDARD LOGIC (Production, Packing)
     # ===============================================================
     
-    # 👇 NEW REFRESH BUTTON FOR STANDARD TABS
+    # Header & Refresh
     c_title, c_ref = st.columns([8, 1])
-    with c_title:
-        st.subheader(f"📂 {tab_name} Dashboard")
+    with c_title: st.subheader(f"📂 {tab_name} Dashboard")
     with c_ref:
-        if st.button("🔄 Refresh", key=f"ref_{worksheet_name}"):
+        if st.button("🔄", key=f"ref_{worksheet_name}"):
             st.cache_data.clear()
             st.rerun()
 
@@ -339,7 +475,7 @@ def manage_tab(tab_name, worksheet_name):
 
     data["Status"] = data["Status"].fillna("Pending").replace("", "Pending")
 
-    # FILTERS
+    # Filters
     unique_items = sorted(data["Item Name"].astype(str).unique().tolist()) if "Item Name" in data.columns else []
     unique_parties = sorted(data["Party Name"].astype(str).unique().tolist()) if "Party Name" in data.columns else []
 
