@@ -15,39 +15,84 @@ st.set_page_config(
     page_title="Amavik ERP", 
     layout="wide", 
     page_icon="🏭",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 # ------------------------------------------------------------------
-# 2. UI/UX STYLING (GXON Analytics + AdminUX Theme)
+# 2. UI/UX STYLING
 # ------------------------------------------------------------------
 st.markdown("""
 <style>
     /* IMPORT FONTS */
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 
-    /* GLOBAL RESET & FONTS */
+    /* GLOBAL RESET */
     html, body, [class*="css"] {
         font-family: 'Plus Jakarta Sans', sans-serif;
         color: #2a3547;
     }
 
-    /* APP BACKGROUND */
     .stApp {
-        background-color: #F4F7FE; /* GXON Light Dashboard BG */
+        background-color: #F4F7FE; 
     }
 
     /* ======================================= */
-    /* SIDEBAR STYLING (Light/Dark/Orange/Blue) */
+    /* LOGIN PAGE STYLING                      */
     /* ======================================= */
+    .login-header {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #111C43;
+        margin-bottom: 0.5rem;
+    }
+    .login-sub {
+        color: #7C8FAC;
+        font-size: 1rem;
+        margin-bottom: 2rem;
+    }
+    
+    /* Input Fields for Login */
+    .stTextInput input[type="text"], .stTextInput input[type="password"] {
+        background-color: #FFFFFF;
+        border: 1px solid #DFE5EF;
+        border-radius: 12px !important;
+        padding: 12px 20px;
+        font-size: 1rem;
+        color: #2a3547;
+        transition: all 0.2s;
+    }
+    .stTextInput input:focus {
+        border-color: #5D87FF;
+        box-shadow: 0 0 0 4px rgba(93, 135, 255, 0.1);
+    }
+    
+    /* Login Button */
+    div.stButton > button {
+        width: 100%;
+        background-color: #5D87FF;
+        color: white;
+        border-radius: 12px;
+        padding: 0.75rem 1rem;
+        font-weight: 600;
+        border: none;
+        box-shadow: 0 4px 14px 0 rgba(93, 135, 255, 0.39);
+    }
+    div.stButton > button:hover {
+        background-color: #4570EA;
+        color: white;
+    }
+
+    /* ======================================= */
+    /* DASHBOARD STYLING                       */
+    /* ======================================= */
+
+    /* SIDEBAR */
     section[data-testid="stSidebar"] {
         background-color: #FFFFFF;
         border-right: 1px solid #EAEFF4;
     }
-    
-    /* Sidebar Text */
     section[data-testid="stSidebar"] * {
-        color: #111C43 !important; /* Dark Navy Text */
+        color: #111C43 !important; 
     }
 
     /* NAV BUTTONS */
@@ -61,42 +106,31 @@ st.markdown("""
         font-weight: 500;
         transition: all 0.2s ease-in-out;
     }
-
-    /* HOVER: Deep Blue */
     div[data-testid="stSidebar"] div.stRadio > div[role="radiogroup"] > label:hover {
         background-color: #111C43 !important;
         color: #FFFFFF !important;
         border-color: #111C43;
     }
-
-    /* ACTIVE: Orange */
     div[data-testid="stSidebar"] div.stRadio > div[role="radiogroup"] > label[data-checked="true"] {
-        background-color: #FF8C00 !important; /* Orange */
+        background-color: #FF8C00 !important;
         color: white !important;
         border-color: #FF8C00;
         font-weight: 600;
         box-shadow: 0 4px 10px rgba(255, 140, 0, 0.25);
     }
-    
-    /* Hide Radio Circles */
     div[data-testid="stSidebar"] div.stRadio div[role="radiogroup"] label div:first-child {
         display: none !important;
     }
 
-    /* ======================================= */
-    /* CARDS (White, Soft Shadow, Rounded)     */
-    /* ======================================= */
+    /* CARDS */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background-color: #FFFFFF !important;
         border: none !important;
         border-radius: 12px !important;
-        /* Exact shadow from reference */
         box-shadow: 0px 9px 20px rgba(46, 35, 94, 0.07) !important;
         padding: 24px !important;
         margin-bottom: 20px;
     }
-
-    /* Prevent double shadow on nested cards */
     div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stVerticalBlockBorderWrapper"] {
         box-shadow: none !important;
         background-color: #F9F9FC !important;
@@ -112,23 +146,6 @@ st.markdown("""
     div[data-testid="stMetricLabel"] { font-size: 0.85rem; color: #7C8FAC; }
     div[data-testid="stMetricValue"] { font-size: 1.8rem; color: #2A3547; font-weight: 700; }
 
-    /* ======================================= */
-    /* TABLES & SEARCH BAR                     */
-    /* ======================================= */
-    
-    /* Custom Search Bar */
-    .stTextInput input {
-        border-radius: 50px !important;
-        border: 1px solid #DFE5EF;
-        padding: 8px 20px;
-        font-size: 0.9rem;
-        background-color: #fff;
-    }
-    .stTextInput input:focus {
-        border-color: #5D87FF;
-        box-shadow: 0 0 0 3px rgba(93, 135, 255, 0.1);
-    }
-    
     /* PAGINATION BUTTONS */
     .pagination-btn button {
         background-color: #ffffff !important;
@@ -141,17 +158,12 @@ st.markdown("""
         box-shadow: none !important;
     }
 
-    /* ======================================= */
-    /* COMPONENTS                              */
-    /* ======================================= */
-
-    /* Tabs */
+    /* TABS */
     .stTabs [data-baseweb="tab-list"] {
         gap: 20px;
         border-bottom: 1px solid #EAEFF4;
         padding-bottom: 0px;
     }
-    
     .stTabs [data-baseweb="tab"] {
         height: 45px;
         background-color: transparent;
@@ -163,7 +175,6 @@ st.markdown("""
         border-radius: 0;
         padding: 0 5px;
     }
-    
     .stTabs [aria-selected="true"] {
         color: #5D87FF !important;
         border-bottom: 3px solid #5D87FF !important;
@@ -171,36 +182,11 @@ st.markdown("""
         box-shadow: none !important;
     }
 
-    /* Buttons */
-    .stButton button {
-        background-color: #5D87FF;
-        color: white;
-        border-radius: 8px;
-        font-weight: 600;
-        border: none;
-        height: 2.6em;
-        box-shadow: 0 4px 14px 0 rgba(93, 135, 255, 0.39);
-        transition: 0.2s;
-    }
-    .stButton button:hover {
-        background-color: #4570EA;
-        color: white;
-    }
-
-    /* Headings */
     h1, h2, h3, h4 { color: #2A3547 !important; font-weight: 700; }
     
-    /* MOBILE OPTIMIZATIONS */
     @media (max-width: 768px) {
-        div[data-testid="column"] {
-            width: 50% !important;
-            flex: 0 0 50% !important;
-            min-width: 50% !important;
-        }
-        .stTabs [data-baseweb="tab"] {
-            font-size: 0.75rem;
-            padding: 5px 10px;
-        }
+        div[data-testid="column"] { width: 50% !important; flex: 0 0 50% !important; min-width: 50% !important; }
+        .stTabs [data-baseweb="tab"] { font-size: 0.75rem; padding: 5px 10px; }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -253,13 +239,24 @@ if st.session_state["logged_in"] and st.session_state["user"] in USERS:
     st.session_state["access"] = USERS[st.session_state["user"]]["access"]
 
 def login():
-    st.title("🔒 Amavik ERP")
-    st.markdown("### Sign In")
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col2:
-        username = st.text_input("User ID")
-        password = st.text_input("Password", type="password")
-        if st.button("Login", type="primary", use_container_width=True):
+    # Split Layout for Login (Image Left | Form Right)
+    c1, c2 = st.columns([1.5, 1])
+    
+    with c1:
+        # Placeholder for a professional ERP/Analytics image
+        st.image("https://img.freepik.com/free-vector/data-extraction-concept-illustration_114360-4876.jpg", use_container_width=True)
+    
+    with c2:
+        st.markdown("<div style='margin-top: 50px;'></div>", unsafe_allow_html=True)
+        st.markdown('<p class="login-header">Welcome to Amavik ERP</p>', unsafe_allow_html=True)
+        st.markdown('<p class="login-sub">Please sign-in to your account to continue</p>', unsafe_allow_html=True)
+        
+        username = st.text_input("User ID", placeholder="Enter your ID")
+        password = st.text_input("Password", type="password", placeholder="Enter your password")
+        
+        st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
+        
+        if st.button("Sign In"):
             if username in USERS and USERS[username]["pass"] == password:
                 st.session_state["logged_in"] = True
                 st.session_state["user"] = username
@@ -267,7 +264,7 @@ def login():
                 st.session_state["access"] = USERS[username]["access"]
                 st.rerun()
             else:
-                st.error("❌ Invalid ID or Password")
+                st.error("Invalid ID or Password")
 
 def logout():
     st.session_state["logged_in"] = False
@@ -648,19 +645,17 @@ def render_add_task_form(data, worksheet_name):
                         save_new_row(data, new_task, worksheet_name)
             else:
                 c1, c2, c3 = st.columns(3)
-                with c1: 
-                    n_date = st.date_input("Order Date")
-                    n_party = st.text_input("Party Name")
-                    n_logo = st.selectbox("Logo", ["W/O Logo", "Laser", "Pad"])
-                with c2:
-                    n_item = st.text_input("Item Name")
-                    n_qty = st.number_input("Order Qty", min_value=1.0, step=0.01)
-                    n_bot = st.selectbox("Bottom Print", ["No", "Laser", "Pad"])
-                with c3:
-                    n_prio = st.number_input("Priority", min_value=1, value=1)
-                    n_box = st.selectbox("Box", ["Loose", "Brown Box", "White Box", "Box"])
-                    n_rem = st.text_input("Remarks")
-                
+                with c1: n_date = st.date_input("Order Date")
+                with c2: n_party = st.text_input("Party Name")
+                with c3: n_logo = st.selectbox("Logo", ["W/O Logo", "Laser", "Pad"])
+                c4, c5 = st.columns(2)
+                with c4: n_item = st.text_input("Item Name")
+                with c5: n_qty = st.number_input("Order Qty", min_value=1.0, step=0.01)
+                c6, c7 = st.columns(2)
+                with c6: n_bot = st.selectbox("Bottom Print", ["No", "Laser", "Pad"])
+                with c7: n_prio = st.number_input("Priority", min_value=1, value=1)
+                n_box = st.selectbox("Box", ["Loose", "Brown Box", "White Box", "Box"])
+                n_rem = st.text_input("Remarks")
                 if st.form_submit_button("🚀 Assign"):
                     if not n_item: st.warning("Item Name Required")
                     else:
