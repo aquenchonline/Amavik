@@ -175,30 +175,48 @@ def manage_tab(tab_name, worksheet_name):
 
         # --- TAB 1: INVENTORY ---
         with tab_inv:
-            # 1. FILTERS (VISIBLE TO ALL)
-            items_list = sorted(data["Item Name"].astype(str).unique()) if "Item Name" in data.columns else []
-            vendor_list = sorted(data["Recvd From"].astype(str).unique()) if "Recvd From" in data.columns else []
-            type_list = sorted(data["Type"].astype(str).unique()) if "Type" in data.columns else []
+            # 1. FILTERS (SEARCH BAR & DATE)
+            c1, c2 = st.columns([1, 3])
+            
+            with c1: 
+                d_filter = st.selectbox("📅 Date Filter", ["All", "Today", "Yesterday", "Prev 7 Days", "This Month"], key="st_date")
+            
+            with c2:
+                # UNIFIED SEARCH BAR
+                search_query = st.text_input(
+                    "🔍 Universal Search (Item, Party, Type, Inv No.)", 
+                    placeholder="Type at least 3 digits to search...",
+                    help="Search applies to Item Name, Recvd From, Type, Transaction Type, and Invoice No."
+                )
 
-            c1, c2, c3, c4, c5 = st.columns(5)
-            with c1: d_filter = st.selectbox("📅 Date Filter", ["All", "Today", "Yesterday", "Prev 7 Days", "This Month"], key="st_date")
-            with c2: i_filter = st.multiselect("📦 Item Name", items_list, key="st_item")
-            with c3: v_filter = st.multiselect("busts_in_silhouette: For or From", vendor_list, key="st_vendor")
-            with c4: t_filter = st.multiselect("🏷️ Product Type", type_list, key="st_type")
-            with c5: trans_filter = st.selectbox("arrows_counterclockwise: Transaction", ["All", "Inward", "Outward"], key="st_trans")
-
-            # Apply Filters
+            # APPLY FILTERS
+            # A. Apply Date Filter First
             filtered_df = filter_by_date(data, d_filter, date_col_name="Date Of Entry")
-            if i_filter: filtered_df = filtered_df[filtered_df["Item Name"].isin(i_filter)]
-            if v_filter: filtered_df = filtered_df[filtered_df["Recvd From"].isin(v_filter)]
-            if t_filter: filtered_df = filtered_df[filtered_df["Type"].isin(t_filter)]
-            if trans_filter != "All": filtered_df = filtered_df[filtered_df["Transaction Type"] == trans_filter]
+            
+            # B. Apply Text Search (If > 3 chars)
+            if search_query and len(search_query) >= 3:
+                # Convert everything to string for searching
+                mask = (
+                    filtered_df['Item Name'].astype(str).str.contains(search_query, case=False, na=False) |
+                    filtered_df['Recvd From'].astype(str).str.contains(search_query, case=False, na=False) |
+                    filtered_df['Type'].astype(str).str.contains(search_query, case=False, na=False) |
+                    filtered_df['Transaction Type'].astype(str).str.contains(search_query, case=False, na=False) |
+                    filtered_df['Invoice No.'].astype(str).str.contains(search_query, case=False, na=False)
+                )
+                filtered_df = filtered_df[mask]
+                
+                # Show Suggestions (Unique Item Names found in the filtered result)
+                found_items = filtered_df['Item Name'].unique().tolist()
+                if found_items:
+                    st.caption(f"💡 **Found Items:** {', '.join(found_items[:5])} {'...' if len(found_items)>5 else ''}")
+                else:
+                    st.caption("No matching items found.")
 
             st.divider()
 
             # 2. LIVE STOCK (VISIBLE TO ALL)
             if not filtered_df.empty and "Item Name" in filtered_df.columns and "Qty" in filtered_df.columns:
-                with st.expander("📊 Live Stock Analysis (Based on Filters)", expanded=True):
+                with st.expander("📊 Live Stock Analysis (Based on Current Search)", expanded=True):
                     df_calc = filtered_df.copy()
                     df_calc["Qty"] = pd.to_numeric(df_calc["Qty"], errors="coerce").fillna(0)
                     
@@ -302,7 +320,7 @@ def manage_tab(tab_name, worksheet_name):
             else:
                 # ADMIN MESSAGE
                 st.divider()
-                st.info("🚫 **Restricted Area:** Transaction Logs and Data Entry are only visible to the Store Incharge.")
+                st.info("🚫 **Restricted Area:** Detailed Transaction Logs and Data Entry are only visible to the Store Incharge.")
         
         # --- TAB 2: PACKING PLANNING ---
         with tab_plan:
