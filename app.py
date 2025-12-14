@@ -14,7 +14,7 @@ import numpy as np
 # ------------------------------------------------------------------
 st.set_page_config(
     page_title="Amavik ERP", 
-    layout="wide", 
+    layout="boxed", 
     page_icon="🏭",
     initial_sidebar_state="collapsed"
 )
